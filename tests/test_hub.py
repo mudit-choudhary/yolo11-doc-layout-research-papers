@@ -21,8 +21,8 @@ from tests.test_checkpoints import make_run
     ("run_name", "expected"),
     [
         ("yolo11s_doc_layout_imgsz_1024", "12-yolo11s-1024"),
-        ("yolo11_doc_layout_v2", "01-yolo11n-640-v2"),
-        ("yolo11s_doc_layout_attempt_02", "17-yolo11s-1024-augexp2"),
+        ("yolo11_doc_layout_v2", "01-yolo11n-640"),
+        ("yolo11s_doc_layout_attempt_02", "17-yolo11s-1024-augexp"),
     ],
 )
 def test_curated_runs_get_their_published_name(run_name, expected):
@@ -59,6 +59,50 @@ def test_published_names_state_architecture_and_resolution():
     for _, folder in push_to_hub.PUBLISH_ORDER:
         assert "yolo11n" in folder or "yolo11s" in folder, folder
         assert "-640" in folder or "-1024" in folder, folder
+
+
+def test_published_names_carry_no_internal_lineage_tokens():
+    """v2/v22/v2224 mean nothing outside this repo and disambiguate nothing."""
+    for _, folder in push_to_hub.PUBLISH_ORDER:
+        assert "-v2" not in folder, f"{folder} leaks internal lineage"
+        assert "round03" not in folder, f"{folder} leaks internal round naming"
+
+
+def test_names_stay_unique_without_lineage_tokens():
+    """The sequence number is what carries uniqueness now."""
+    folders = [f for _, f in push_to_hub.PUBLISH_ORDER]
+    assert len(folders) == len(set(folders))
+
+
+def test_failed_runs_keep_a_marker_in_the_name():
+    """A higher number reads as newer and better; these are newer and worse."""
+    for run, folder in push_to_hub.PUBLISH_ORDER:
+        if run.endswith("_attempt_02"):
+            assert folder.endswith("-augexp"), folder
+        else:
+            assert not folder.endswith("-augexp"), folder
+
+
+def test_every_non_obvious_run_has_a_status_line():
+    """The Notes column is where 'which should I use' gets answered."""
+    for run, _ in push_to_hub.PUBLISH_ORDER:
+        if run.endswith("_attempt_02") or "round03" in run:
+            assert push_to_hub.status_for(run), f"{run} needs a note"
+    assert "Recommended" in push_to_hub.status_for("yolo11s_doc_layout_imgsz_1024")
+
+
+def test_status_map_only_names_runs_that_are_published():
+    published = {run for run, _ in push_to_hub.PUBLISH_ORDER}
+    assert set(push_to_hub.RUN_STATUS) <= published
+
+
+def test_index_table_shows_the_notes_column():
+    index = model_card.build_index_card("ns/coll", [
+        {"name": "a", "subfolder": "12-yolo11s-1024", "imgsz": 1024,
+         "metrics": {"mAP50-95": "0.7694"}, "status": "**Recommended**"},
+    ])
+    assert "| Notes |" in index
+    assert "**Recommended**" in index
 
 
 def test_publish_rank_orders_known_runs_and_sinks_unknown_ones():
@@ -351,7 +395,7 @@ def test_variant_card_warns_on_compromised_lineage(tmp_path):
     make_run(tmp_path, "run_round03_thing", imgsz=1024)
     checkpoint = discover(tmp_path)["run_round03_thing"]
 
-    assert "Compromised lineage" in model_card.build_variant_card(
+    assert "Chained lineage" in model_card.build_variant_card(
         checkpoint, "ns/coll", "x")
 
 

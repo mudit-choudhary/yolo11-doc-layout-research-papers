@@ -91,44 +91,78 @@ RUN_ARTIFACTS = (
 
 #: Publish order and public subfolder name for each run, oldest first.
 #:
-#: Run directory names grew organically during the project and carry internal
-#: history a stranger cannot read: ``yolo11_doc_layout_v2224_round03_imgsz_1024``
-#: says nothing about the architecture, and ``v2224`` means nothing outside this
-#: repository. The published names lead with a sequence number so the collection
-#: sorts chronologically in the Hub file browser, then state the two things a
-#: consumer actually chooses on: architecture and training resolution. The
-#: lineage token is kept last, so provenance survives, and every variant card
-#: names the original run explicitly.
+#: Names carry three things and no more: **when** it was trained, **what
+#: architecture**, and **at what resolution**. That is what someone choosing a
+#: checkpoint actually decides on.
 #:
-#: Suffixes:
-#:   ``round03``   descends from the dataset round whose train and validation
-#:                 splits overlapped; scores here are honest but the lineage is not
-#:   ``augexp``    the failed augmentation experiment, published as a negative
-#:                 result rather than for use
+#: Earlier drafts also encoded the internal lineage (``v2``, ``v22``,
+#: ``v2224``). That was dropped. The sequence number already makes every name
+#: unique, so the lineage token did no disambiguating work, and ``v2224`` means
+#: nothing to anyone outside this repository. Lineage is real information, but
+#: it belongs on the variant card, which states the parent checkpoint and the
+#: full training history in words.
+#:
+#: The one status kept in the name is ``augexp``, and it earns its place for a
+#: specific reason: a higher sequence number reads as newer and therefore
+#: better. Runs 13 to 17 are newer than run 12 and worse. Without the suffix the
+#: numbering would actively mislead.
 #:
 #: Ordering is by hand rather than by file timestamp because most runs were
 #: copied into FinetunedModels/ at once and share a meaningless mtime. This
 #: table is the chronology, reconstructed from surviving timestamps in models/
 #: and from each run's parent checkpoint.
 PUBLISH_ORDER: tuple[tuple[str, str], ...] = (
-    ("yolo11_doc_layout_v2",                                 "01-yolo11n-640-v2"),
-    ("yolo11_doc_layout_v22",                                "02-yolo11n-640-v22"),
-    ("yolo11_doc_layout_v2224",                              "03-yolo11n-640-v2224"),
-    ("yolo11_doc_layout_v222_round03",                       "04-yolo11n-640-v222-round03"),
-    ("yolo11_doc_layout_v2224_round03",                      "05-yolo11n-640-v2224-round03"),
-    ("yolo11_doc_layout_v2_imgsz_1024",                      "06-yolo11n-1024-v2"),
-    ("yolo11_doc_layout_v22_imgsz_1024",                     "07-yolo11n-1024-v22"),
-    ("yolo11_doc_layout_v2224_imgsz_1024",                   "08-yolo11n-1024-v2224"),
-    ("yolo11_doc_layout_v222_round03_imgsz_1024",            "09-yolo11n-1024-v222-round03"),
-    ("yolo11_doc_layout_v2224_round03_imgsz_1024",           "10-yolo11n-1024-v2224-round03"),
+    ("yolo11_doc_layout_v2",                                 "01-yolo11n-640"),
+    ("yolo11_doc_layout_v22",                                "02-yolo11n-640"),
+    ("yolo11_doc_layout_v2224",                              "03-yolo11n-640"),
+    ("yolo11_doc_layout_v222_round03",                       "04-yolo11n-640"),
+    ("yolo11_doc_layout_v2224_round03",                      "05-yolo11n-640"),
+    ("yolo11_doc_layout_v2_imgsz_1024",                      "06-yolo11n-1024"),
+    ("yolo11_doc_layout_v22_imgsz_1024",                     "07-yolo11n-1024"),
+    ("yolo11_doc_layout_v2224_imgsz_1024",                   "08-yolo11n-1024"),
+    ("yolo11_doc_layout_v222_round03_imgsz_1024",            "09-yolo11n-1024"),
+    ("yolo11_doc_layout_v2224_round03_imgsz_1024",           "10-yolo11n-1024"),
     ("yolo11n_doc_layout_imgsz_1024",                        "11-yolo11n-1024"),
     ("yolo11s_doc_layout_imgsz_1024",                        "12-yolo11s-1024"),
-    ("yolo11_doc_layout_v222_imgsz_1024_attempt_02",         "13-yolo11n-1024-v222-augexp"),
-    ("yolo11_doc_layout_v222_round03_attempt_02",            "14-yolo11n-1024-v222-round03-augexp"),
-    ("yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02", "15-yolo11n-1024-v222-round03-augexp2"),
+    ("yolo11_doc_layout_v222_imgsz_1024_attempt_02",         "13-yolo11n-1024-augexp"),
+    ("yolo11_doc_layout_v222_round03_attempt_02",            "14-yolo11n-1024-augexp"),
+    ("yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02", "15-yolo11n-1024-augexp"),
     ("yolo11s_doc_layout_imgsz_1024_attempt_02",             "16-yolo11s-1024-augexp"),
-    ("yolo11s_doc_layout_attempt_02",                        "17-yolo11s-1024-augexp2"),
+    ("yolo11s_doc_layout_attempt_02",                        "17-yolo11s-1024-augexp"),
 )
+
+#: One-line status shown against each variant in the root comparison table.
+#: This is where "which should I use" gets answered, rather than in a folder
+#: name a reader has to decode.
+#:
+#: "Chained lineage" means the checkpoint is the product of several successive
+#: fine-tuning passes, the earliest of which used a dataset round whose train
+#: and validation splits pointed at the same images, and which overlaps the
+#: current held-out set by up to 19% of its papers. That was tested for score
+#: inflation and none was found: clean-lineage models show the same gap between
+#: overlapping and non-overlapping papers, so the gap is a property of those
+#: pages being easier, not of the models having memorised them. The note is
+#: therefore about reproducibility, not about the numbers being wrong. See
+#: docs/EVALUATION.md.
+RUN_STATUS: dict[str, str] = {
+    "yolo11s_doc_layout_imgsz_1024": "**Recommended.** Single fine-tune from base",
+    "yolo11n_doc_layout_imgsz_1024": "Fastest. Single fine-tune from base",
+    "yolo11_doc_layout_v2": "Early run, superseded",
+    "yolo11_doc_layout_v22": "Early run, superseded",
+    "yolo11_doc_layout_v2224": "Early run, superseded",
+    "yolo11_doc_layout_v2_imgsz_1024": "Chained lineage",
+    "yolo11_doc_layout_v22_imgsz_1024": "Chained lineage",
+    "yolo11_doc_layout_v2224_imgsz_1024": "Chained lineage. Tops the table by ~0.002, within noise",
+    "yolo11_doc_layout_v222_round03": "Chained lineage",
+    "yolo11_doc_layout_v2224_round03": "Chained lineage",
+    "yolo11_doc_layout_v222_round03_imgsz_1024": "Chained lineage",
+    "yolo11_doc_layout_v2224_round03_imgsz_1024": "Chained lineage",
+    "yolo11_doc_layout_v222_imgsz_1024_attempt_02": "Failed experiment, do not deploy",
+    "yolo11_doc_layout_v222_round03_attempt_02": "Failed experiment, do not deploy",
+    "yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02": "Failed experiment, do not deploy",
+    "yolo11s_doc_layout_imgsz_1024_attempt_02": "Failed experiment, do not deploy",
+    "yolo11s_doc_layout_attempt_02": "Failed experiment, do not deploy",
+}
 
 #: Runs whose weights are numerically identical to another run's, verified by
 #: comparing state dicts tensor by tensor. The files differ only in metadata.
@@ -160,6 +194,11 @@ def subfolder_for(run_name: str) -> str:
     """
     known = _SUBFOLDER_BY_RUN.get(run_name)
     return known if known is not None else run_name.replace("_", "-").lower()
+
+
+def status_for(run_name: str) -> str:
+    """Return the one-line status shown against a variant, or an empty string."""
+    return RUN_STATUS.get(run_name, "")
 
 
 def publish_rank(run_name: str) -> int:
@@ -283,6 +322,7 @@ def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
             "rank": publish_rank(name),
             "subfolder": record.get("subfolder", subfolder_for(name)),
             "run_name": record.get("run_name", name),
+            "status": record.get("status", status_for(name)),
             "imgsz": record.get("imgsz", "?"),
             "metrics": record.get("metrics", {}),
             "held_out": record.get("metrics_from_held_out_eval", True),
@@ -332,6 +372,7 @@ def publish_one(
         "repo_id": repo_id,
         "run_name": checkpoint.name,
         "subfolder": subfolder,
+        "status": status_for(checkpoint.name),
         "imgsz": checkpoint.imgsz,
         "metrics": metrics,
         "metrics_from_held_out_eval": from_held_out,
@@ -508,6 +549,7 @@ def main(argv: list[str] | None = None) -> int:
             preview.setdefault(checkpoint.name, {
                 "subfolder": subfolder_for(checkpoint.name),
                 "run_name": checkpoint.name,
+                "status": status_for(checkpoint.name),
                 "imgsz": checkpoint.imgsz,
                 "metrics": metrics,
                 "metrics_from_held_out_eval": from_held_out,

@@ -205,7 +205,8 @@ def build_index_card(
 
     if ordered:
         rows = "\n".join(
-            "| `{subfolder}`{mark} | {imgsz} | {precision} | {recall} | {mAP50} | {mAP5095} |".format(
+            "| `{subfolder}`{mark} | {imgsz} | {mAP5095} | {mAP50} | {precision} | "
+            "{recall} | {status} |".format(
                 subfolder=entry["subfolder"],
                 mark="" if entry.get("held_out", True) else " †",
                 imgsz=entry["imgsz"],
@@ -213,12 +214,16 @@ def build_index_card(
                 recall=entry["metrics"].get("recall", "n/a"),
                 mAP50=entry["metrics"].get("mAP50", "n/a"),
                 mAP5095=entry["metrics"].get("mAP50-95", "n/a"),
+                status=entry.get("status", "") or "",
             )
             for entry in ordered
         )
+        # mAP50-95 sits second, right after the name: it is the column people
+        # are actually comparing, and burying it at the far right makes a wide
+        # table harder to read than it needs to be.
         table = (
-            "| Variant | imgsz | Precision | Recall | mAP50 | mAP50-95 |\n"
-            "|---|---|---|---|---|---|\n" + rows
+            "| Variant | imgsz | mAP50-95 | mAP50 | Precision | Recall | Notes |\n"
+            "|---|---|---|---|---|---|---|\n" + rows
         )
         if any_training_time:
             table += (
@@ -253,12 +258,17 @@ Every variant lives in its own subfolder of this one repository, numbered
 oldest to newest. Each has its own `README.md` with its full training
 configuration.
 
-Subfolder names read `NN-yolo11<size>-<training resolution>[-lineage]`, so
+Subfolder names read `NN-yolo11<size>-<training resolution>`, so
 `12-yolo11s-1024` is the twelfth model trained, a YOLO11-small at 1024 pixels.
-A `round03` suffix marks a model descended from a dataset round whose train and
-validation splits overlapped; its scores here are measured honestly, but its
-training history is not clean. An `augexp` suffix marks the failed augmentation
-experiment described below.
+The number is chronological, so the folder listing shows the order the
+collection was built in.
+
+An `augexp` suffix marks the failed augmentation experiment described below.
+It is there because a higher number otherwise reads as newer and better, and
+these are newer and worse.
+
+Anything else you need in order to choose is in the Notes column of the table
+below, and in each variant's own card, rather than encoded in a folder name.
 
 Fine-tuned from [`{BASE_REPO_ID}`](https://huggingface.co/{BASE_REPO_ID}).
 
@@ -269,9 +279,19 @@ pick otherwise. It is the strongest model with a clean training lineage, and it
 leads on `Table` and `Footnote`, the classes that decide where a chunk boundary
 falls.
 
-One other checkpoint scores marginally higher overall, but it was fine-tuned
-through a dataset round whose train and validation splits overlapped, so its
-lineage cannot be trusted. It is published for completeness, not for use.
+One other checkpoint, `08-yolo11n-1024`, scores about 0.002 higher. That is
+within noise, and it is the product of three successive fine-tuning passes over
+datasets that no longer exist in their original form, which makes it far harder
+to reproduce or reason about. The recommendation is for the simpler lineage, not
+because the numbers separate them.
+
+Variants marked **chained lineage** descend from several successive fine-tuning
+passes, the earliest over a dataset round whose train and validation splits
+pointed at the same images. That round overlaps the current held-out set by up
+to 19% of its papers, so their scores were checked for inflation. **None was
+found:** clean-lineage models show the same gap between overlapping and
+non-overlapping papers, meaning those pages are simply easier for everything.
+The scores below are comparable. The note is about reproducibility.
 
 Variants ending in `attempt_02` are **deliberately published failures**. They
 carry an augmentation bundle that regressed every model it was applied to, by
@@ -462,6 +482,15 @@ def build_variant_card(
         "training-time numbers, not an independent evaluation."
     )
 
+    run_args = load_run_args(checkpoint)
+    parent = Path(str(run_args.get("model", "")))
+    if parent.name == "best.pt":
+        parent_label = f"the earlier run {parent.parent.parent.name}"
+    elif parent.name:
+        parent_label = f"the base checkpoint {parent.stem}"
+    else:
+        parent_label = "an unrecorded checkpoint"
+
     caveat = ""
     if checkpoint.name.endswith("_attempt_02"):
         caveat = (
@@ -472,10 +501,12 @@ def build_variant_card(
         )
     elif "round03" in checkpoint.name:
         caveat = (
-            "\n> **Compromised lineage.** This run descends from the "
-            "`round_03` dataset, whose train and validation splits pointed at "
-            "the same images. Its scores here are measured honestly against "
-            "`round_final`, but its training history is not clean.\n"
+            "\n> **Chained lineage.** This checkpoint is the result of several "
+            "successive fine-tuning passes, one of which used a dataset round "
+            "whose train and validation splits pointed at the same images. The "
+            "scores below are measured honestly against a clean held-out split, "
+            "so the model is usable, but its training history is not a clean "
+            "experiment and should not be read as one.\n"
         )
 
     duplicate_note = ""
@@ -493,7 +524,8 @@ collection. See the [repository root](https://huggingface.co/{repo_id}) for the
 class taxonomy, the comparison against every other variant, and the limitations
 that apply to all of them.
 
-Internal run name: `{checkpoint.name}`. Trained at `imgsz={checkpoint.imgsz}`.
+Internal run name: `{checkpoint.name}`. Trained at `imgsz={checkpoint.imgsz}`
+from `{parent_label}`.
 {duplicate_note}{caveat}
 ## Results
 

@@ -135,6 +135,71 @@ not. The model cannot learn a boundary the annotations do not agree on.
 
 The fix is an annotation audit, not more training.
 
+### Older lineages overlap the held-out set, but do not gain from it
+
+Most checkpoints are the product of several successive fine-tuning passes. The
+earliest of those used `round_01` and `round_02`, whose `data.yaml` set
+`train: images` and `val: images`, so the model validated on its own training
+data. Worse, those rounds overlap the current held-out papers:
+
+| Round | Papers | Overlap with round_final val+test |
+|---|---|---|
+| round_01 | 71 | 10 papers, 7% of held-out |
+| round_02 | 257 | 27 papers, 19% of held-out |
+
+Only four runs have a fully clean ancestry, having trained on `round_final`
+alone: `11-yolo11n-1024`, `12-yolo11s-1024`, and the two `yolo11s` `augexp`
+runs. The other fifteen descend from something that saw part of today's
+validation set.
+
+That looks like it should inflate their scores. **It was tested, and it does
+not.** Splitting the 130 validation pages into the 40 whose papers an ancestor
+had seen and the 90 it had not:
+
+| Model | Lineage | Seen by an ancestor | Never seen | Gap |
+|---|---|---|---|---|
+| 08-yolo11n-1024 | chained | 0.7937 | 0.7691 | +0.0246 |
+| 09-yolo11n-1024 | chained | 0.7756 | 0.7667 | +0.0089 |
+| 11-yolo11n-1024 | **clean** | 0.7843 | 0.7647 | +0.0196 |
+| 12-yolo11s-1024 | **clean** | 0.7922 | 0.7667 | +0.0255 |
+
+If contamination were driving the gap, the chained models would show a larger
+one than the clean models. They do not: the largest gap of the four belongs to
+`12-yolo11s-1024`, which has a spotless lineage. The 40 overlapping papers are
+simply easier pages for every model.
+
+The most likely reason is that the ancestral exposure was several fine-tuning
+generations and one resolution change ago, and subsequent training on
+`round_final` overwrote it. Detection also does not memorise the way
+classification can.
+
+**So the table above is comparable across lineages.** The reason to prefer a
+clean lineage is reproducibility, not score integrity.
+
+On the 90 genuinely-unseen pages the ranking is `08` at 0.7691, then `09` and
+`12` tied at 0.7667, then `11` at 0.7647. A spread of 0.004 across four models
+is noise. Nothing here separates them on accuracy.
+
+### Why yolo11s is recommended over the checkpoint that scores highest
+
+`08-yolo11n-1024` edges `12-yolo11s-1024` by about 0.002 overall and 0.002 on
+unseen pages. That is not a difference.
+
+The recommendation goes to `12-yolo11s-1024` on grounds other than the headline
+number:
+
+- **It is one fine-tune from a published base checkpoint.** `08` is three
+  passes deep over `round_02` and an early flat dataset that no longer exists in
+  its original form. Reproducing `08` is not currently possible; reproducing
+  `12` is one command.
+- **It leads on the classes that decide chunk boundaries.** `Table` at 0.985 and
+  `Footnote` at 0.678, against `yolo11n`'s weaker numbers on both.
+- **Its lineage needs no caveat**, which matters for something being published
+  for other people to use.
+
+If throughput matters more than any of that, `11-yolo11n-1024` is 0.005 behind
+and roughly five times faster to train.
+
 ### The attempt_02 sweep regressed everything, but does not say why
 
 Every `attempt_02` run scored below the checkpoint it was fine-tuned from, on
@@ -211,16 +276,6 @@ that scored well here was trained with Ultralytics' defaults, `fliplr=0.5` and
 The fine-tuning defaults therefore match the best run rather than the better
 argument. Reproducing a published model matters more than acting on untested
 reasoning. Both remain flags, and isolating them is cheap: one run each.
-
-### yolo11s over yolo11n, narrowly
-
-0.769 against 0.766 overall, which is within noise. The case for `s` is
-per-class: it is better on `Table` and `Footnote`, the classes that decide
-chunk boundaries. The cost is roughly 3.5 hours of training against 40 minutes,
-and batch 3 rather than 4.
-
-If throughput matters more than the last point of accuracy, `yolo11n` is the
-better trade.
 
 ### yolo11m was never fairly assessed
 

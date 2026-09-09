@@ -27,7 +27,14 @@ assumption. The command that verified it is given so you can repeat it.
       repositories.
 - [x] **Subfolder names are unique, sortable, Hub-safe, and cover every run on
       disk.** 19 run directories map to 17 published names plus 2 declared
-      duplicates, with nothing unaccounted for.
+      duplicates, with nothing unaccounted for. Names carry only order,
+      architecture and resolution; internal lineage tokens were removed after
+      confirming the sequence number alone makes every name unique.
+- [x] **Older lineages do not gain from overlapping the held-out set.** Fifteen
+      of nineteen runs descend from a round that saw up to 19% of today's
+      validation papers. Measured directly by scoring on the seen and unseen
+      halves separately: clean-lineage models show the same gap, so the
+      published scores are comparable. See [EVALUATION.md](EVALUATION.md).
 - [x] **Two runs are genuine duplicates and are skipped.**
       `yolo11_doc_layout_v222` and `yolo11_doc_layout_v222_imgsz_1024` are
       numerically identical to their `v22` counterparts, verified by comparing

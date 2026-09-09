@@ -132,35 +132,36 @@ of Ultralytics' plot outputs simply publish fewer files.
 
 ## Subfolder naming
 
-Run directory names grew organically and carry history a stranger cannot read.
-`yolo11_doc_layout_v2224_round03_imgsz_1024` says nothing about the
-architecture, and `v2224` means nothing outside this repository.
-
-Published names follow `NN-yolo11<size>-<resolution>[-lineage]`:
+Published names carry three things and no more: **when** it was trained, **what
+architecture**, and **at what resolution**.
 
 ```
 yolo11s_doc_layout_imgsz_1024               ->  12-yolo11s-1024/
-yolo11_doc_layout_v2224_round03_imgsz_1024  ->  10-yolo11n-1024-v2224-round03/
-yolo11s_doc_layout_attempt_02               ->  17-yolo11s-1024-augexp2/
+yolo11_doc_layout_v2224_round03_imgsz_1024  ->  10-yolo11n-1024/
+yolo11s_doc_layout_attempt_02               ->  17-yolo11s-1024-augexp/
 ```
 
-The number is chronological, so the Hub file browser lists the collection in
-the order it was built. Then come the two things a consumer actually chooses
-on, architecture and training resolution. The lineage token comes last so
-provenance survives, and every variant card states the original run name.
+An earlier draft also encoded the internal lineage, giving names like
+`10-yolo11n-1024-v2224-round03`. That was dropped. The sequence number already
+makes every name unique, so the lineage token was doing no disambiguating work,
+and `v2224` means nothing to anyone outside this repository. Worse, `round03`
+was actively wrong: those runs trained on `round_final`, and the token was a
+leftover from an earlier naming plan.
 
-Two suffixes carry warnings:
+Lineage is real information. It belongs on the variant card, which states the
+parent checkpoint in words, and in the Notes column of the root comparison
+table, which is where people actually choose.
 
-| Suffix | Meaning |
-|---|---|
-| `round03` | Descends from the dataset round whose train and val splits overlapped. Scores are honest; the lineage is not. |
-| `augexp` | The failed augmentation experiment. Published as a negative result, not for use. |
+The one status kept in a name is `augexp`, and it earns its place: a higher
+sequence number reads as newer and therefore better, and runs 13 to 17 are
+newer and worse. Without the suffix the numbering would mislead.
 
-The mapping lives in `PUBLISH_ORDER` in `doclayout_ft/hub/push_to_hub.py`. It
-is a hand-written table rather than a derived rule, because most runs were
-copied into `FinetunedModels/` in one go and their file timestamps carry no
-chronology. Add new runs to the table; anything missing from it falls back to a
-plain hyphenated name and sorts to the end of the queue.
+The mapping lives in `PUBLISH_ORDER` in `doclayout_ft/hub/push_to_hub.py`, with
+the Notes text in `RUN_STATUS` beside it. Both are hand-written tables rather
+than derived rules, because most runs were copied into `FinetunedModels/` in one
+go and their file timestamps carry no chronology. Add new runs to the table;
+anything missing falls back to a plain hyphenated name and sorts to the end of
+the queue.
 
 ## Two runs are not published
 

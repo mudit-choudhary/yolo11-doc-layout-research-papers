@@ -20,11 +20,12 @@ Everything here runs on a single 4 GB GPU.
 | Unlabelled pool | ~22,000 rendered pages from 1128 PDFs, not used for training |
 | Hardware | GTX 1650, 4 GB VRAM |
 
-One checkpoint, `yolo11_doc_layout_v2224_imgsz_1024`, scores marginally higher
-at 0.772, but it was fine-tuned through the discarded `round_03` split and its
-lineage cannot be trusted. `yolo11s_doc_layout_imgsz_1024` is recommended
-instead: it is the strongest model with a clean training history, and it leads
-on the classes that decide chunk boundaries.
+One checkpoint, `yolo11_doc_layout_v2224_imgsz_1024`, scores about 0.002 higher.
+That is within noise. It is recommended against because it is three fine-tuning
+passes deep over datasets that no longer exist in their original form, so it
+cannot be reproduced, whereas `yolo11s_doc_layout_imgsz_1024` is a single
+fine-tune from a published base checkpoint and leads on the classes that decide
+chunk boundaries.
 
 Only a labelled subset of the corpus is used. The 1128 source PDFs render to
 roughly 22,000 page images; 850 of those pages, across 566 papers, are
@@ -128,6 +129,10 @@ in [docs/SPRINT_REPORT.md](docs/SPRINT_REPORT.md).
 - **Splitting by paper rather than by page was a correction, not a refinement.**
   Pages of one paper share a template, so a page-level split validates the
   model on layouts it trained on. Every metric from before that fix is void.
+- **Older lineages overlap the held-out set but gain nothing from it.** Fifteen
+  of nineteen runs descend from a round that saw up to 19% of today's validation
+  papers. Tested directly: clean-lineage models show the same gap on those
+  papers, so they are simply easier pages, not memorised ones.
 - **`yolo11s` beat `yolo11n` slightly**, on the classes that matter most for
   chunking, at roughly five times the training time.
 - **`yolo11m` could not be trained on this hardware.** It runs out of memory
