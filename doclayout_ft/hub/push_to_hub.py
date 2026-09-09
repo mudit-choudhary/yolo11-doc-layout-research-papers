@@ -131,37 +131,54 @@ PUBLISH_ORDER: tuple[tuple[str, str], ...] = (
     ("yolo11s_doc_layout_attempt_02",                        "17-yolo11s-1024-augexp"),
 )
 
-#: One-line status shown against each variant in the root comparison table.
-#: This is where "which should I use" gets answered, rather than in a folder
-#: name a reader has to decode.
+#: One-line note shown against each variant in the root comparison table.
 #:
-#: "Chained lineage" means the checkpoint is the product of several successive
-#: fine-tuning passes, the earliest of which used a dataset round whose train
-#: and validation splits pointed at the same images, and which overlaps the
-#: current held-out set by up to 19% of its papers. That was tested for score
-#: inflation and none was found: clean-lineage models show the same gap between
-#: overlapping and non-overlapping papers, so the gap is a property of those
-#: pages being easier, not of the models having memorised them. The note is
-#: therefore about reproducibility, not about the numbers being wrong. See
-#: docs/EVALUATION.md.
+#: The table gets read on its own, so each note has to make sense without the
+#: prose above it. "N fine-tunes deep" is the fact worth stating: a checkpoint
+#: produced by one pass from a published base can be reproduced with a single
+#: command, while one produced by four successive passes over datasets that no
+#: longer exist cannot be reproduced at all.
+#:
+#: Depth was read from each run's args.yaml by walking the `model:` key back to
+#: a base checkpoint, resolving each parent by run name across both model
+#: directories rather than by its recorded path, since several recorded paths
+#: point at locations that no longer exist.
+#:
+#: Depth says nothing about accuracy. It was checked: the deeper lineages pass
+#: through a dataset round that overlaps today's held-out papers, and scoring
+#: seen against unseen papers separately showed clean-lineage models with the
+#: same gap. The scores are comparable. See docs/EVALUATION.md.
 RUN_STATUS: dict[str, str] = {
-    "yolo11s_doc_layout_imgsz_1024": "**Recommended.** Single fine-tune from base",
-    "yolo11n_doc_layout_imgsz_1024": "Fastest. Single fine-tune from base",
-    "yolo11_doc_layout_v2": "Early run, superseded",
-    "yolo11_doc_layout_v22": "Early run, superseded",
-    "yolo11_doc_layout_v2224": "Early run, superseded",
-    "yolo11_doc_layout_v2_imgsz_1024": "Chained lineage",
-    "yolo11_doc_layout_v22_imgsz_1024": "Chained lineage",
-    "yolo11_doc_layout_v2224_imgsz_1024": "Chained lineage. Tops the table by ~0.002, within noise",
-    "yolo11_doc_layout_v222_round03": "Chained lineage",
-    "yolo11_doc_layout_v2224_round03": "Chained lineage",
-    "yolo11_doc_layout_v222_round03_imgsz_1024": "Chained lineage",
-    "yolo11_doc_layout_v2224_round03_imgsz_1024": "Chained lineage",
-    "yolo11_doc_layout_v222_imgsz_1024_attempt_02": "Failed experiment, do not deploy",
-    "yolo11_doc_layout_v222_round03_attempt_02": "Failed experiment, do not deploy",
-    "yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02": "Failed experiment, do not deploy",
-    "yolo11s_doc_layout_imgsz_1024_attempt_02": "Failed experiment, do not deploy",
-    "yolo11s_doc_layout_attempt_02": "Failed experiment, do not deploy",
+    # Single pass from a published base: reproducible with one command.
+    "yolo11s_doc_layout_imgsz_1024":
+        "**Recommended.** 1 fine-tune from base, reproducible",
+    "yolo11n_doc_layout_imgsz_1024":
+        "Fastest. 1 fine-tune from base, reproducible",
+    "yolo11_doc_layout_v2": "1 fine-tune from base. Early run, superseded",
+    "yolo11_doc_layout_v22": "1 fine-tune from base. Early run, superseded",
+
+    # Multiple passes, earliest over datasets that no longer exist.
+    "yolo11_doc_layout_v2224": "2 fine-tunes deep. Early run, superseded",
+    "yolo11_doc_layout_v2_imgsz_1024": "2 fine-tunes deep, hard to reproduce",
+    "yolo11_doc_layout_v22_imgsz_1024": "2 fine-tunes deep, hard to reproduce",
+    "yolo11_doc_layout_v222_round03": "2 fine-tunes deep, hard to reproduce",
+    "yolo11_doc_layout_v2224_round03": "3 fine-tunes deep, hard to reproduce",
+    "yolo11_doc_layout_v2224_imgsz_1024":
+        "3 fine-tunes deep, hard to reproduce. Tops the table by ~0.002, within noise",
+    "yolo11_doc_layout_v222_round03_imgsz_1024": "3 fine-tunes deep, hard to reproduce",
+    "yolo11_doc_layout_v2224_round03_imgsz_1024": "4 fine-tunes deep, hard to reproduce",
+
+    # The failed augmentation experiment.
+    "yolo11_doc_layout_v222_imgsz_1024_attempt_02":
+        "Failed experiment, do not deploy. 3 fine-tunes deep",
+    "yolo11_doc_layout_v222_round03_attempt_02":
+        "Failed experiment, do not deploy. 3 fine-tunes deep",
+    "yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02":
+        "Failed experiment, do not deploy. 4 fine-tunes deep",
+    "yolo11s_doc_layout_imgsz_1024_attempt_02":
+        "Failed experiment, do not deploy. 2 fine-tunes deep",
+    "yolo11s_doc_layout_attempt_02":
+        "Failed experiment, do not deploy. 1 fine-tune from base",
 }
 
 #: Runs whose weights are numerically identical to another run's, verified by
@@ -211,11 +228,13 @@ def publish_rank(run_name: str) -> int:
     return _ORDER_BY_RUN.get(run_name, len(PUBLISH_ORDER))
 
 
-def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict]:
+def load_ledger(path: Path | None = None) -> dict[str, dict]:
     """Read the record of already-published runs.
 
     Args:
-        path: Ledger file.
+        path: Ledger file. Defaults to :data:`LEDGER_PATH`, resolved at call
+            time rather than bound as a default argument, so that overriding
+            the module attribute actually takes effect.
 
     Returns:
         Mapping of run name to its publish record. A missing or corrupt ledger
@@ -223,6 +242,7 @@ def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict]:
         handles as a no-op commit, whereas refusing to run would block the
         backlog entirely.
     """
+    path = path or LEDGER_PATH
     if not path.is_file():
         return {}
     try:
@@ -237,7 +257,7 @@ def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict]:
 def record_published(
     run_name: str,
     entry: dict,
-    path: Path = LEDGER_PATH,
+    path: Path | None = None,
 ) -> dict[str, dict]:
     """Add one run to the ledger and return the updated ledger.
 
@@ -252,6 +272,7 @@ def record_published(
     Returns:
         The ledger including the new entry.
     """
+    path = path or LEDGER_PATH
     ledger = load_ledger(path)
     ledger[run_name] = {
         **entry,
@@ -322,7 +343,10 @@ def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
             "rank": publish_rank(name),
             "subfolder": record.get("subfolder", subfolder_for(name)),
             "run_name": record.get("run_name", name),
-            "status": record.get("status", status_for(name)),
+            # Editorial text, not a fact about the publish event: always take
+            # the current wording so an edit reaches rows published weeks ago.
+            # The stored value is a fallback for a run no longer in the table.
+            "status": status_for(name) or record.get("status", ""),
             "imgsz": record.get("imgsz", "?"),
             "metrics": record.get("metrics", {}),
             "held_out": record.get("metrics_from_held_out_eval", True),

@@ -294,15 +294,24 @@ datasets that no longer exist in their original form, which makes it far harder
 to reproduce or reason about. The recommendation is for the simpler lineage, not
 because the numbers separate them.
 
-Variants marked **chained lineage** descend from several successive fine-tuning
-passes, the earliest over a dataset round whose train and validation splits
-pointed at the same images. That round overlaps the current held-out set by up
-to 19% of its papers, so their scores were checked for inflation. **None was
-found:** clean-lineage models show the same gap between overlapping and
-non-overlapping papers, meaning those pages are simply easier for everything.
-The scores below are comparable. The note is about reproducibility.
+### Reading the Notes column
 
-Variants ending in `attempt_02` are **deliberately published failures**. They
+**"1 fine-tune from base"** means the checkpoint was produced by fine-tuning a
+published base model once. You can reproduce it with a single command.
+
+**"N fine-tunes deep"** means N successive passes, each starting from the
+previous one's output. The earliest passes used datasets that no longer exist in
+their original form, so those checkpoints cannot be reproduced from scratch. It
+also makes them harder to reason about: a model four passes deep has been shaped
+by four different dataset versions.
+
+Depth says nothing about accuracy. The early datasets overlap today's held-out
+papers by up to 19%, so the scores were checked for inflation and **none was
+found**: single-pass models show the same gap between overlapping and
+non-overlapping papers, meaning those pages are simply easier for everything.
+The numbers below are comparable across every row.
+
+Variants whose name ends `-augexp` are **deliberately published failures**. They
 carry an augmentation bundle that regressed every model it was applied to, by
 0.016 to 0.060 mAP50-95. They are here so the result is reproducible, not
 because they are worth deploying. That sweep changed seven settings at once, so

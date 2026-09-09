@@ -567,3 +567,43 @@ def test_card_stays_quiet_for_runs_with_original_plots(tmp_path):
 def test_regenerated_plots_names_a_real_published_run():
     published = {run for run, _ in push_to_hub.PUBLISH_ORDER}
     assert model_card.REGENERATED_PLOTS <= published
+
+
+def test_ledger_path_override_actually_takes_effect(tmp_path, monkeypatch):
+    """A default argument would bind LEDGER_PATH at import time, so overriding
+    the module attribute would silently do nothing and tests would read the
+    real ledger."""
+    fake = tmp_path / "ledger.json"
+    monkeypatch.setattr(push_to_hub, "LEDGER_PATH", fake)
+
+    assert push_to_hub.load_ledger() == {}
+    push_to_hub.record_published("run_a", {"subfolder": "01-x", "imgsz": 640})
+
+    assert fake.is_file(), "the override must be where the write landed"
+    assert set(push_to_hub.load_ledger()) == {"run_a"}
+
+
+def test_notes_come_from_the_current_table_not_the_ledger(tmp_path, monkeypatch):
+    """Editing a note must reach a variant published weeks ago."""
+    run = "yolo11s_doc_layout_imgsz_1024"
+    stale = {run: {"subfolder": "12-yolo11s-1024", "imgsz": 1024,
+                   "metrics": {}, "status": "something written long ago"}}
+
+    entry = push_to_hub.index_entries(stale)[0]
+
+    assert entry["status"] == push_to_hub.status_for(run)
+    assert entry["status"] != "something written long ago"
+
+
+def test_a_run_dropped_from_the_table_keeps_its_stored_note():
+    stale = {"run_no_longer_listed": {"subfolder": "99-x", "imgsz": 640,
+                                      "metrics": {}, "status": "kept"}}
+    assert push_to_hub.index_entries(stale)[0]["status"] == "kept"
+
+
+def test_notes_are_self_explanatory_without_the_prose_above_them():
+    """The table is read on its own, so each note must stand alone."""
+    for run, _ in push_to_hub.PUBLISH_ORDER:
+        note = push_to_hub.status_for(run)
+        assert note, f"{run} has no note"
+        assert "fine-tune" in note, f"{run}: note should state lineage depth: {note!r}"

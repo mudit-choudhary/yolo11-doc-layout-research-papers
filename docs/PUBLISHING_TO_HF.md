@@ -211,6 +211,20 @@ names. The duplicates are skipped, and named on the card of the run they
 duplicate so the omission is visible. That leaves 17 distinct models from 19
 run directories.
 
+## Editing a note after publishing
+
+The Notes column text lives in `RUN_STATUS` in
+`doclayout_ft/hub/push_to_hub.py`. It is editorial, not a record of the publish,
+so it is re-read from that table every time the root card is rebuilt. Change the
+wording there, then:
+
+```bash
+python -m doclayout_ft.hub.push_to_hub --refresh-index --yes
+```
+
+That rewrites only the root `README.md`, uploads no weights, and takes seconds.
+It covers every variant in the ledger, including ones published weeks earlier.
+
 ## The cards
 
 Generated from what each run recorded, not written by hand, so they cannot
