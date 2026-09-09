@@ -352,9 +352,31 @@ would leak layout across the boundary and inflate the scores.
 - **Reading order is not predicted.** The models output regions, not their
   sequence. Ordering is left to the consumer.
 
-## License
+## License and attribution
 
-AGPL-3.0, inherited from Ultralytics YOLO.
+Released under **AGPL-3.0**, inherited from
+[Ultralytics YOLO](https://github.com/ultralytics/ultralytics), which these
+models were trained with. Note the AGPL network clause: serving these weights
+to users over a network obliges you to offer them the corresponding source.
+Ultralytics sells an [Enterprise License](https://www.ultralytics.com/license)
+for use without that obligation.
+
+Fine-tuned from [`{BASE_REPO_ID}`](https://huggingface.co/{BASE_REPO_ID}), which
+is MIT-licensed and was itself trained on
+[DocLayNet](https://huggingface.co/datasets/ds4sd/DocLayNet)
+(CDLA-Permissive-1.0).
+
+Annotations were made with
+[X-AnyLabeling](https://github.com/CVHub520/X-AnyLabeling) (GPL-3.0). That
+licence covers the tool, not the labels produced with it.
+
+## Training images are not distributed
+
+These repositories contain weights, metrics and plots only. The annotated page
+images are not published, because they are rendered from arXiv preprints whose
+licences vary per paper and often do not permit redistribution. Ultralytics'
+`train_batch` and `val_batch` debugging mosaics are excluded for the same
+reason.
 """
 
 

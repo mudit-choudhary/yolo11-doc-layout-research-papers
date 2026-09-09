@@ -306,3 +306,48 @@ def test_variant_card_survives_a_run_with_no_recorded_metrics(tmp_path):
 
     assert "n/a" in card
     assert "No `args.yaml` was recorded" in card
+
+
+# --------------------------------------------------------------------------
+# Guard: never distribute page imagery
+# --------------------------------------------------------------------------
+
+
+def test_training_page_mosaics_are_never_uploaded(tmp_path):
+    """train_batch/val_batch images are composites of real annotated pages.
+
+    The corpus is rendered from arXiv preprints whose licences vary per paper
+    and often forbid redistribution, so these must not reach the Hub. This is
+    the one upload rule that is a licensing matter rather than a tidiness one.
+    """
+    run_dir = make_run(tmp_path, "run_a", imgsz=1024)
+    for name in ("train_batch0.jpg", "train_batch12.jpg",
+                 "val_batch0_labels.jpg", "val_batch0_pred.jpg",
+                 "val_batch2_pred.jpg"):
+        (run_dir / name).write_bytes(b"page imagery")
+
+    uploaded = {name for _, name in push_to_hub.files_for(discover(tmp_path)["run_a"])}
+
+    assert not any("train_batch" in n or "val_batch" in n for n in uploaded), \
+        f"page mosaics must never be uploaded, found: {sorted(uploaded)}"
+    assert "best.pt" in uploaded, "the weights themselves still go up"
+
+
+def test_upload_list_contains_no_page_imagery_by_name():
+    """A second line of defence over the artefact list itself."""
+    forbidden = ("train_batch", "val_batch", "mosaic")
+    for name in push_to_hub.RUN_ARTIFACTS:
+        assert not any(f in name for f in forbidden), \
+            f"{name} looks like it depicts training pages"
+
+
+def test_dataset_files_are_never_uploaded(tmp_path):
+    """Label files and split lists are dataset, not model artefacts."""
+    run_dir = make_run(tmp_path, "run_a", imgsz=1024)
+    for name in ("train.txt", "val.txt", "classes.txt", "data.yaml", "labels.cache"):
+        (run_dir / name).write_bytes(b"dataset")
+
+    uploaded = {name for _, name in push_to_hub.files_for(discover(tmp_path)["run_a"])}
+
+    assert uploaded & {"train.txt", "val.txt", "classes.txt",
+                       "data.yaml", "labels.cache"} == set()
