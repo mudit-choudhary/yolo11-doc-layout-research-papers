@@ -193,6 +193,33 @@ On a CUDA out-of-memory error, halve `--batch` first. Only drop `--imgsz` if
 that fails, since resolution is where the accuracy is. If system RAM rather
 than VRAM is the constraint, set `--cache disk` or `--cache false`.
 
+#### `--multi-scale` costs far more memory than it looks
+
+This one silently killed four runs in this project, and the number is not
+obvious. Ultralytics computes:
+
+```
+max_imgsz = imgsz * (1 + multi_scale)
+```
+
+So `--multi-scale 0.5` at `--imgsz 1024` trains on images up to **1536 pixels**.
+Activation memory grows with area, so that is **2.25x** the peak of a plain 1024
+run. On a 4 GB card it dies in the first epoch, before any weights are written.
+
+Measured on this hardware:
+
+| multi_scale | Peak image size | Memory vs 1024 | Result at batch 3-4 |
+|---|---|---|---|
+| 0.0 | 1024 | 1.00x | fine |
+| 0.23 – 0.25 | 1259 – 1280 | ~1.55x | fine |
+| 0.5 | 1536 | 2.25x | **dies in epoch 1** |
+
+The failure is quiet. Ultralytics creates the run directory and writes its
+dataset plots before training starts, so a dead run leaves behind a folder that
+looks real and contains no weights. Checkpoint discovery finds no `best.pt` and
+skips it, so the run is simply absent from every later table with nothing
+saying why. Run `python -m doclayout_ft.audit` to see them.
+
 ### The augmentation experiment that failed
 
 An `attempt_02` sweep raised `copy_paste` to 0.2 – 0.3 and `multi_scale` to
