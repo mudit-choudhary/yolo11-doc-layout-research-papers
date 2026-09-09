@@ -428,6 +428,62 @@ def update_index(api, repo_id: str, ledger: dict[str, dict], split: str,
     )
 
 
+def preflight(repo_id: str) -> bool:
+    """Report whether the current Hub login can publish to ``repo_id``.
+
+    The repository is created automatically on first publish, so nothing needs
+    making by hand. Two things can still fail at that moment, and both are
+    cheaper to catch during a dry run than halfway through an upload:
+
+    - **Not logged in, or logged in with a read-only token.** ``create_repo``
+      needs write scope.
+    - **The namespace is not yours.** ``darkdwine/...`` only works if that is
+      your username or an organisation you can write to. Otherwise the Hub
+      refuses, which is a safe failure but an avoidable one.
+
+    Args:
+        repo_id: The target repository, ``namespace/name``.
+
+    Returns:
+        True if the check passed, False if it found a problem or could not run.
+        Advisory only: publishing is never blocked on this.
+    """
+    namespace = repo_id.split("/")[0]
+    try:
+        from huggingface_hub import HfApi
+        from huggingface_hub.utils import HfHubHTTPError
+    except ImportError:
+        print("  preflight: huggingface_hub not installed, cannot check login.")
+        return False
+
+    try:
+        info = HfApi().whoami()
+    except Exception:  # noqa: BLE001 - any failure here means "not usable yet"
+        print("  preflight: not logged in. Run 'hf auth login' with a WRITE token.")
+        return False
+
+    user = info.get("name", "?")
+    orgs = {o.get("name") for o in info.get("orgs", []) if isinstance(o, dict)}
+    scope = (info.get("auth", {}).get("accessToken", {}) or {}).get("role")
+
+    print(f"  preflight: logged in as '{user}'"
+          + (f", token role '{scope}'" if scope else ""))
+
+    ok = True
+    if scope == "read":
+        print("  preflight: WARNING this token is read-only; publishing will fail. "
+              "Create a write token at https://huggingface.co/settings/tokens")
+        ok = False
+    if namespace != user and namespace not in orgs:
+        print(f"  preflight: WARNING namespace '{namespace}' is neither your "
+              f"username nor an org you belong to. Publishing will be refused. "
+              f"Use --repo-id {user}/<name> or fix DEFAULT_REPO_ID.")
+        ok = False
+    if ok:
+        print(f"  preflight: '{repo_id}' will be created automatically on publish.")
+    return ok
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct the command-line parser."""
     parser = argparse.ArgumentParser(
@@ -517,7 +573,14 @@ def main(argv: list[str] | None = None) -> int:
 
     mode = "PUBLISHING" if args.yes else "DRY RUN (pass --yes to upload)"
     print(f"{mode}\nRepository: {args.repo_id}")
-    print(f"Batch: {len(batch)} of {len(queue)} pending run(s), oldest first.\n")
+    print(f"Batch: {len(batch)} of {len(queue)} pending run(s), oldest first.")
+
+    if not args.yes:
+        # Only on a dry run: the point is to surface a login or namespace
+        # problem before the user commits to an upload, and a real publish
+        # would hit the same errors immediately anyway.
+        preflight(args.repo_id)
+    print()
 
     api = None
     if args.yes:

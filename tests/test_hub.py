@@ -472,3 +472,74 @@ def test_dataset_files_are_never_uploaded(tmp_path):
 
     assert uploaded & {"train.txt", "val.txt", "classes.txt",
                        "data.yaml", "labels.cache"} == set()
+
+
+# --------------------------------------------------------------------------
+# Preflight: catch a bad login or namespace before an upload starts
+# --------------------------------------------------------------------------
+
+
+class _FakeApi:
+    """Stands in for HfApi.whoami() without touching the network."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def whoami(self):
+        if self._payload is None:
+            raise RuntimeError("not logged in")
+        return self._payload
+
+
+def _patch_api(monkeypatch, payload):
+    import huggingface_hub
+    monkeypatch.setattr(huggingface_hub, "HfApi", lambda *a, **k: _FakeApi(payload))
+
+
+def test_preflight_reports_a_missing_login(monkeypatch, capsys):
+    _patch_api(monkeypatch, None)
+    assert push_to_hub.preflight("darkdwine/coll") is False
+    assert "not logged in" in capsys.readouterr().out
+
+
+def test_preflight_accepts_your_own_namespace(monkeypatch, capsys):
+    _patch_api(monkeypatch, {"name": "darkdwine",
+                             "auth": {"accessToken": {"role": "write"}}})
+    assert push_to_hub.preflight("darkdwine/coll") is True
+    assert "created automatically" in capsys.readouterr().out
+
+
+def test_preflight_rejects_a_namespace_you_do_not_own(monkeypatch, capsys):
+    """Publishing to someone else's namespace is refused by the Hub."""
+    _patch_api(monkeypatch, {"name": "someone_else",
+                             "auth": {"accessToken": {"role": "write"}}})
+    assert push_to_hub.preflight("darkdwine/coll") is False
+    assert "neither your username nor an org" in capsys.readouterr().out
+
+
+def test_preflight_accepts_an_org_you_belong_to(monkeypatch):
+    _patch_api(monkeypatch, {"name": "mudit", "orgs": [{"name": "darkdwine"}],
+                             "auth": {"accessToken": {"role": "write"}}})
+    assert push_to_hub.preflight("darkdwine/coll") is True
+
+
+def test_preflight_flags_a_read_only_token(monkeypatch, capsys):
+    """A read token authenticates fine and then fails at create_repo."""
+    _patch_api(monkeypatch, {"name": "darkdwine",
+                             "auth": {"accessToken": {"role": "read"}}})
+    assert push_to_hub.preflight("darkdwine/coll") is False
+    assert "read-only" in capsys.readouterr().out
+
+
+def test_preflight_survives_a_payload_without_auth_details(monkeypatch):
+    """Older hub versions omit the token role; that is not an error."""
+    _patch_api(monkeypatch, {"name": "darkdwine"})
+    assert push_to_hub.preflight("darkdwine/coll") is True
+
+
+def test_preflight_never_blocks_publishing(monkeypatch):
+    """It is advisory: a False result must not stop a deliberate --yes."""
+    import inspect
+    source = inspect.getsource(push_to_hub.main)
+    assert "preflight(args.repo_id)" in source
+    assert "if not args.yes:" in source

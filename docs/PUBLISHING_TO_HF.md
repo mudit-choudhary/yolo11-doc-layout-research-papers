@@ -27,6 +27,42 @@ puts the comparison table in front of them on arrival.
 Uploads are staged: runs go up oldest first, a couple at a time, so the backlog
 is cleared over several weeks rather than in one bulk push.
 
+## You do not create the repository by hand
+
+There is nothing to set up in the browser. The first publish calls
+`create_repo(..., exist_ok=True)` before uploading anything, so the repository
+appears on its own. Later publishes reuse it.
+
+Two things do have to be right, and a dry run now checks both for you:
+
+- **A write token.** A read-only token authenticates fine and then fails when
+  the repository is created. Make one at
+  <https://huggingface.co/settings/tokens> with the **write** role.
+- **A namespace you own.** `darkdwine/...` works only if that is your username
+  or an organisation you can write to. If your Hub username differs, the Hub
+  refuses the create, which is safe but avoidable.
+
+The dry run reports both:
+
+```
+  preflight: logged in as 'darkdwine', token role 'write'
+  preflight: 'darkdwine/yolo11-doc-layout-research-papers' will be created automatically on publish.
+```
+
+### One thing to decide before the first publish, not after
+
+`--private` takes effect **only when the repository is created**. Because
+`exist_ok=True` leaves an existing repository alone, passing `--private` on a
+later run does nothing. If you want to inspect the collection before anyone
+else can see it, pass `--private` on the *first* publish:
+
+```bash
+python -m doclayout_ft.hub.push_to_hub --limit 2 --private --yes
+```
+
+Flipping it to public afterwards is one setting in the Hub UI. Going the other
+way means the content was public in the meantime.
+
 ## Before the first push
 
 Authenticate through the Hugging Face CLI. The script never handles a token
@@ -35,6 +71,7 @@ itself, and no token should ever be written into this repository.
 ```bash
 hf auth login          # newer huggingface_hub
 huggingface-cli login  # older
+hf auth whoami         # confirm the username matches the namespace
 ```
 
 Generate the evaluation the cards will quote, otherwise they fall back to

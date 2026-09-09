@@ -71,7 +71,10 @@ python -m doclayout_ft.hub.push_to_hub --models-dir FinetunedModels models --lim
 - [ ] **Repository name.** `darkdwine/yolo11-doc-layout-research-papers`. Change
       `DEFAULT_REPO_ID` in `doclayout_ft/hub/push_to_hub.py` if you want another.
 - [ ] **Public or private first?** Publishing private and flipping to public
-      after inspection is the low-risk order.
+      after inspection is the low-risk order. **Decide this before the first
+      publish:** `--private` applies only when the repository is created, so
+      passing it later does nothing. You do not create the repository by hand;
+      the first publish makes it.
 
 ---
 
@@ -108,16 +111,20 @@ the Hub, so it is worth running rather than skipping.
 
 ```bash
 hf auth login
+hf auth whoami
 ```
 
 Paste a token with **write** access, created at
-<https://huggingface.co/settings/tokens>. No token goes in this repository.
+<https://huggingface.co/settings/tokens>. A read-only token authenticates fine
+and then fails when the repository is created. No token goes in this
+repository.
 
-Confirm it took:
+The username `hf auth whoami` prints must match the namespace in
+`DEFAULT_REPO_ID`, currently `darkdwine`. The dry run in step 5 checks this for
+you and says so.
 
-```bash
-hf auth whoami
-```
+You do **not** need to create the repository in the browser. The first publish
+creates it.
 
 ### 3. Refresh the metrics the cards quote
 
@@ -145,8 +152,11 @@ you decided to include the failed `augexp` runs.
 python -m doclayout_ft.hub.push_to_hub --limit 2
 ```
 
-Look at the file list under each variant. You want nothing ending `.jpg` except
-`labels.jpg`. Nothing is uploaded without `--yes`.
+Read two things. First the `preflight:` lines, which confirm your login has
+write scope and that the namespace is yours. Then the file list under each
+variant: you want nothing ending `.jpg` except `labels.jpg`.
+
+Nothing is uploaded without `--yes`.
 
 ### 6. Publish the first two
 
@@ -154,8 +164,10 @@ Look at the file list under each variant. You want nothing ending `.jpg` except
 python -m doclayout_ft.hub.push_to_hub --limit 2 --yes
 ```
 
-Add `--private` to inspect before anyone else can see it. Making it public
-later is one click in the Hub settings.
+The repository is created here, automatically. Add `--private` if you want to
+inspect before anyone else can see it, and add it **on this first run**: it is
+ignored once the repository exists. Making it public later is one setting in
+the Hub UI.
 
 ### 7. Check the result
 
