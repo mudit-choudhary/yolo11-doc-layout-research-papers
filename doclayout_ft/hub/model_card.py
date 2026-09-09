@@ -249,8 +249,16 @@ paper possible: text can be split on the paragraph and section boundaries the
 model found, instead of on a fixed character count that cuts through the middle
 of a table.
 
-Every variant lives in its own subfolder of this one repository. Each has its
-own `README.md` with its full training configuration.
+Every variant lives in its own subfolder of this one repository, numbered
+oldest to newest. Each has its own `README.md` with its full training
+configuration.
+
+Subfolder names read `NN-yolo11<size>-<training resolution>[-lineage]`, so
+`12-yolo11s-1024` is the twelfth model trained, a YOLO11-small at 1024 pixels.
+A `round03` suffix marks a model descended from a dataset round whose train and
+validation splits overlapped; its scores here are measured honestly, but its
+training history is not clean. An `augexp` suffix marks the failed augmentation
+experiment described below.
 
 Fine-tuned from [`{BASE_REPO_ID}`](https://huggingface.co/{BASE_REPO_ID}).
 
@@ -424,6 +432,7 @@ def build_variant_card(
     repo_id: str,
     subfolder: str,
     split: str = "val",
+    duplicate_of: str | None = None,
 ) -> str:
     """Render the ``README.md`` that sits inside one variant's subfolder.
 
@@ -432,6 +441,9 @@ def build_variant_card(
         repo_id: The Hub repository holding the whole collection.
         subfolder: This variant's folder within that repository.
         split: Evaluation split whose numbers to quote.
+        duplicate_of: Name of another run whose weights are identical to this
+            one's and which is therefore not published separately. Named on the
+            card so the omission is visible rather than silent.
 
     Returns:
         The card as Markdown. No YAML front matter: only the repository root
@@ -466,13 +478,23 @@ def build_variant_card(
             "`round_final`, but its training history is not clean.\n"
         )
 
-    return f"""# {checkpoint.name}
+    duplicate_note = ""
+    if duplicate_of:
+        duplicate_note = (
+            f"\nThe run `{duplicate_of}` produced a checkpoint numerically "
+            f"identical to this one, differing only in file metadata. It is not "
+            f"published separately.\n"
+        )
+
+    return f"""# {subfolder}
 
 One variant of the [`{repo_id}`](https://huggingface.co/{repo_id}) document-layout
 collection. See the [repository root](https://huggingface.co/{repo_id}) for the
 class taxonomy, the comparison against every other variant, and the limitations
 that apply to all of them.
-{caveat}
+
+Internal run name: `{checkpoint.name}`. Trained at `imgsz={checkpoint.imgsz}`.
+{duplicate_note}{caveat}
 ## Results
 
 {header}

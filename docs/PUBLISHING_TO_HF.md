@@ -5,15 +5,18 @@ subfolder:
 
 ```
 darkdwine/yolo11-doc-layout-research-papers/
-├── README.md                              <- comparison across all variants
-├── yolo11s-doc-layout-imgsz-1024/
-│   ├── README.md                          <- this variant's own card
+├── README.md                       <- comparison across all variants
+├── 01-yolo11n-640-v2/
+├── 02-yolo11n-640-v22/
+├── ...
+├── 11-yolo11n-1024/
+├── 12-yolo11s-1024/                <- recommended
+│   ├── README.md                   <- this variant's own card
 │   ├── best.pt
 │   ├── args.yaml
 │   ├── results.csv
 │   └── ...curves and confusion matrices...
-├── yolo11n-doc-layout-imgsz-1024/
-│   └── ...
+├── 13-yolo11n-1024-v222-augexp/
 └── ...
 ```
 
@@ -121,7 +124,7 @@ variant has the same entry point:
 
 ```python
 hf_hub_download(repo_id="darkdwine/yolo11-doc-layout-research-papers",
-                filename="yolo11s-doc-layout-imgsz-1024/best.pt")
+                filename="12-yolo11s-1024/best.pt")
 ```
 
 Only files the run actually produced are uploaded. Older runs that predate some
@@ -129,14 +132,47 @@ of Ultralytics' plot outputs simply publish fewer files.
 
 ## Subfolder naming
 
-Underscores become hyphens, lowercased:
+Run directory names grew organically and carry history a stranger cannot read.
+`yolo11_doc_layout_v2224_round03_imgsz_1024` says nothing about the
+architecture, and `v2224` means nothing outside this repository.
+
+Published names follow `NN-yolo11<size>-<resolution>[-lineage]`:
 
 ```
-yolo11s_doc_layout_imgsz_1024  ->  yolo11s-doc-layout-imgsz-1024/
+yolo11s_doc_layout_imgsz_1024               ->  12-yolo11s-1024/
+yolo11_doc_layout_v2224_round03_imgsz_1024  ->  10-yolo11n-1024-v2224-round03/
+yolo11s_doc_layout_attempt_02               ->  17-yolo11s-1024-augexp2/
 ```
 
-The mapping is one-to-one, so a subfolder always traces back to the run that
-produced it.
+The number is chronological, so the Hub file browser lists the collection in
+the order it was built. Then come the two things a consumer actually chooses
+on, architecture and training resolution. The lineage token comes last so
+provenance survives, and every variant card states the original run name.
+
+Two suffixes carry warnings:
+
+| Suffix | Meaning |
+|---|---|
+| `round03` | Descends from the dataset round whose train and val splits overlapped. Scores are honest; the lineage is not. |
+| `augexp` | The failed augmentation experiment. Published as a negative result, not for use. |
+
+The mapping lives in `PUBLISH_ORDER` in `doclayout_ft/hub/push_to_hub.py`. It
+is a hand-written table rather than a derived rule, because most runs were
+copied into `FinetunedModels/` in one go and their file timestamps carry no
+chronology. Add new runs to the table; anything missing from it falls back to a
+plain hyphenated name and sorts to the end of the queue.
+
+## Two runs are not published
+
+`yolo11_doc_layout_v222` and `yolo11_doc_layout_v222_imgsz_1024` produce
+checkpoints **numerically identical** to `v22` and `v22_imgsz_1024`
+respectively, verified by comparing state dicts tensor by tensor. The files
+differ only in metadata, which is why their scores match to four decimal places.
+
+Publishing both would put the same model in the collection twice under two
+names. The duplicates are skipped, and named on the card of the run they
+duplicate so the omission is visible. That leaves 17 distinct models from 19
+run directories.
 
 ## The cards
 

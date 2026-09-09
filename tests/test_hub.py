@@ -20,13 +20,59 @@ from tests.test_checkpoints import make_run
 @pytest.mark.parametrize(
     ("run_name", "expected"),
     [
-        ("yolo11s_doc_layout_imgsz_1024", "yolo11s-doc-layout-imgsz-1024"),
-        ("yolo11_doc_layout_v2", "yolo11-doc-layout-v2"),
-        ("Already-Hyphenated", "already-hyphenated"),
+        ("yolo11s_doc_layout_imgsz_1024", "12-yolo11s-1024"),
+        ("yolo11_doc_layout_v2", "01-yolo11n-640-v2"),
+        ("yolo11s_doc_layout_attempt_02", "17-yolo11s-1024-augexp2"),
     ],
 )
-def test_subfolder_is_a_reversible_transformation(run_name, expected):
+def test_curated_runs_get_their_published_name(run_name, expected):
     assert push_to_hub.subfolder_for(run_name) == expected
+
+
+def test_unknown_run_falls_back_to_a_valid_name():
+    """A model trained after the table was written must still publish."""
+    assert push_to_hub.subfolder_for("some_new_run") == "some-new-run"
+
+
+def test_published_names_are_unique():
+    """Two runs sharing a subfolder would overwrite each other on the Hub."""
+    folders = [folder for _, folder in push_to_hub.PUBLISH_ORDER]
+    assert len(folders) == len(set(folders))
+
+
+def test_published_names_sort_into_publish_order():
+    """The numeric prefix is what makes the Hub file browser show chronology."""
+    folders = [folder for _, folder in push_to_hub.PUBLISH_ORDER]
+    assert folders == sorted(folders)
+
+
+def test_published_names_are_hub_safe():
+    folders = [folder for _, folder in push_to_hub.PUBLISH_ORDER]
+    for folder in folders:
+        assert folder == folder.lower()
+        assert "/" not in folder and " " not in folder
+        assert all(c.isalnum() or c == "-" for c in folder), folder
+
+
+def test_published_names_state_architecture_and_resolution():
+    """Architecture and training resolution are what a consumer picks on."""
+    for _, folder in push_to_hub.PUBLISH_ORDER:
+        assert "yolo11n" in folder or "yolo11s" in folder, folder
+        assert "-640" in folder or "-1024" in folder, folder
+
+
+def test_publish_rank_orders_known_runs_and_sinks_unknown_ones():
+    ranks = [push_to_hub.publish_rank(run) for run, _ in push_to_hub.PUBLISH_ORDER]
+    assert ranks == sorted(ranks)
+    assert push_to_hub.publish_rank("not_in_table") >= len(push_to_hub.PUBLISH_ORDER)
+
+
+def test_duplicate_runs_point_at_a_run_that_is_published():
+    """An alias must defer to a run that actually reaches the Hub."""
+    published = {run for run, _ in push_to_hub.PUBLISH_ORDER}
+    for alias, canonical in push_to_hub.DUPLICATE_OF.items():
+        assert canonical in published, f"{alias} defers to unpublished {canonical}"
+        assert alias not in published, f"{alias} is both an alias and published"
 
 
 def test_everything_publishes_into_one_repository():
@@ -68,6 +114,37 @@ def test_ledger_holding_a_json_list_is_ignored(tmp_path):
     ledger = tmp_path / "ledger.json"
     ledger.write_text(json.dumps(["run_a"]))
     assert push_to_hub.load_ledger(ledger) == {}
+
+
+def test_duplicate_weights_are_not_published_twice(tmp_path):
+    """v222 is byte-different from v22 but numerically identical to it."""
+    alias, canonical = next(iter(push_to_hub.DUPLICATE_OF.items()))
+    make_run(tmp_path, alias, imgsz=1024)
+    make_run(tmp_path, canonical, imgsz=1024)
+
+    queue = push_to_hub.pending_checkpoints(
+        discover(tmp_path), ledger={}, include_published=False)
+
+    names = [c.name for c in queue]
+    assert canonical in names
+    assert alias not in names, "the duplicate must not get its own subfolder"
+
+
+def test_queue_follows_the_curated_order_not_file_mtime(tmp_path):
+    """Most runs were copied at once, so mtimes carry no chronology."""
+    import os
+    early, late = push_to_hub.PUBLISH_ORDER[0][0], push_to_hub.PUBLISH_ORDER[5][0]
+    make_run(tmp_path, early, imgsz=640)
+    make_run(tmp_path, late, imgsz=1024)
+    # Give the chronologically earlier run the NEWER mtime, so mtime ordering
+    # would put it second.
+    os.utime(tmp_path / early / "weights" / "best.pt", (9_000, 9_000))
+    os.utime(tmp_path / late / "weights" / "best.pt", (1_000, 1_000))
+
+    queue = push_to_hub.pending_checkpoints(
+        discover(tmp_path), ledger={}, include_published=False)
+
+    assert [c.name for c in queue] == [early, late]
 
 
 def test_queue_is_oldest_first_and_skips_published_runs(tmp_path):

@@ -158,4 +158,16 @@ need neither a GPU nor the real data.
 
 ## License
 
-AGPL-3.0, inherited from Ultralytics YOLO.
+Copyright (C) 2026 Mudit Choudhary.
+
+Licensed under **AGPL-3.0**, inherited from
+[Ultralytics YOLO](https://github.com/ultralytics/ultralytics), which these
+models were trained with. The full text is in [LICENSE](LICENSE).
+
+Note the AGPL network clause: serving these models to users over a network
+obliges you to offer them the corresponding source. Ultralytics sells an
+[Enterprise License](https://www.ultralytics.com/license) for use without that
+obligation.
+
+See [docs/LICENSING.md](docs/LICENSING.md) for the full upstream chain and the
+caveats, including that the base checkpoint declares MIT.

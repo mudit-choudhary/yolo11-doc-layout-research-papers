@@ -4,17 +4,19 @@ Everything goes into **one** Hub repo, with each checkpoint in its own
 subfolder::
 
     darkdwine/yolo11-doc-layout-research-papers/
-    ├── README.md                          <- comparison across all variants
-    ├── yolo11s-doc-layout-imgsz-1024/
-    │   ├── README.md                      <- this variant's own card
+    ├── README.md                   <- comparison across all variants
+    ├── 01-yolo11n-640-v2/
+    ├── ...
+    ├── 12-yolo11s-1024/            <- recommended
+    │   ├── README.md               <- this variant's own card
     │   ├── best.pt
     │   ├── args.yaml
     │   └── ...curves and matrices...
-    └── yolo11n-doc-layout-imgsz-1024/
+    └── 17-yolo11s-1024-augexp2/
         └── ...
 
-One repository rather than fourteen, because these are variants of a single
-model family, not fourteen unrelated models. Someone comparing them should not
+One repository rather than seventeen, because these are variants of a single
+model family, not seventeen unrelated models. Someone comparing them should not
 have to open fourteen pages, and the root card puts the comparison table in
 front of them on arrival.
 
@@ -87,20 +89,87 @@ RUN_ARTIFACTS = (
 )
 
 
-def subfolder_for(run_name: str) -> str:
-    """Derive a variant's subfolder name from its run name.
+#: Publish order and public subfolder name for each run, oldest first.
+#:
+#: Run directory names grew organically during the project and carry internal
+#: history a stranger cannot read: ``yolo11_doc_layout_v2224_round03_imgsz_1024``
+#: says nothing about the architecture, and ``v2224`` means nothing outside this
+#: repository. The published names lead with a sequence number so the collection
+#: sorts chronologically in the Hub file browser, then state the two things a
+#: consumer actually chooses on: architecture and training resolution. The
+#: lineage token is kept last, so provenance survives, and every variant card
+#: names the original run explicitly.
+#:
+#: Suffixes:
+#:   ``round03``   descends from the dataset round whose train and validation
+#:                 splits overlapped; scores here are honest but the lineage is not
+#:   ``augexp``    the failed augmentation experiment, published as a negative
+#:                 result rather than for use
+#:
+#: Ordering is by hand rather than by file timestamp because most runs were
+#: copied into FinetunedModels/ at once and share a meaningless mtime. This
+#: table is the chronology, reconstructed from surviving timestamps in models/
+#: and from each run's parent checkpoint.
+PUBLISH_ORDER: tuple[tuple[str, str], ...] = (
+    ("yolo11_doc_layout_v2",                                 "01-yolo11n-640-v2"),
+    ("yolo11_doc_layout_v22",                                "02-yolo11n-640-v22"),
+    ("yolo11_doc_layout_v2224",                              "03-yolo11n-640-v2224"),
+    ("yolo11_doc_layout_v222_round03",                       "04-yolo11n-640-v222-round03"),
+    ("yolo11_doc_layout_v2224_round03",                      "05-yolo11n-640-v2224-round03"),
+    ("yolo11_doc_layout_v2_imgsz_1024",                      "06-yolo11n-1024-v2"),
+    ("yolo11_doc_layout_v22_imgsz_1024",                     "07-yolo11n-1024-v22"),
+    ("yolo11_doc_layout_v2224_imgsz_1024",                   "08-yolo11n-1024-v2224"),
+    ("yolo11_doc_layout_v222_round03_imgsz_1024",            "09-yolo11n-1024-v222-round03"),
+    ("yolo11_doc_layout_v2224_round03_imgsz_1024",           "10-yolo11n-1024-v2224-round03"),
+    ("yolo11n_doc_layout_imgsz_1024",                        "11-yolo11n-1024"),
+    ("yolo11s_doc_layout_imgsz_1024",                        "12-yolo11s-1024"),
+    ("yolo11_doc_layout_v222_imgsz_1024_attempt_02",         "13-yolo11n-1024-v222-augexp"),
+    ("yolo11_doc_layout_v222_round03_attempt_02",            "14-yolo11n-1024-v222-round03-augexp"),
+    ("yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02", "15-yolo11n-1024-v222-round03-augexp2"),
+    ("yolo11s_doc_layout_imgsz_1024_attempt_02",             "16-yolo11s-1024-augexp"),
+    ("yolo11s_doc_layout_attempt_02",                        "17-yolo11s-1024-augexp2"),
+)
 
-    Underscores become hyphens, which reads better in a URL and matches Hub
-    convention. The transformation is one-to-one, so a subfolder can always be
-    traced back to the run that produced it.
+#: Runs whose weights are numerically identical to another run's, verified by
+#: comparing state dicts tensor by tensor. The files differ only in metadata.
+#: Publishing both would put the same model in the collection twice under two
+#: names, so the alias is skipped and named in the card of the run it duplicates.
+DUPLICATE_OF: dict[str, str] = {
+    "yolo11_doc_layout_v222": "yolo11_doc_layout_v22",
+    "yolo11_doc_layout_v222_imgsz_1024": "yolo11_doc_layout_v22_imgsz_1024",
+}
+
+_SUBFOLDER_BY_RUN = dict(PUBLISH_ORDER)
+_ORDER_BY_RUN = {run: index for index, (run, _) in enumerate(PUBLISH_ORDER)}
+
+
+def subfolder_for(run_name: str) -> str:
+    """Return the public subfolder name for a run.
+
+    Known runs use their entry in :data:`PUBLISH_ORDER`. Anything else, such as
+    a run trained after this table was written, falls back to the run name with
+    underscores turned into hyphens, which is valid but carries none of the
+    ordering or architecture information the curated names do. Add new runs to
+    the table rather than relying on the fallback.
 
     Args:
         run_name: A run directory name, e.g. ``yolo11s_doc_layout_imgsz_1024``.
 
     Returns:
-        A subfolder name, e.g. ``yolo11s-doc-layout-imgsz-1024``.
+        A subfolder name, e.g. ``12-yolo11s-1024``.
     """
-    return run_name.replace("_", "-").lower()
+    known = _SUBFOLDER_BY_RUN.get(run_name)
+    return known if known is not None else run_name.replace("_", "-").lower()
+
+
+def publish_rank(run_name: str) -> int:
+    """Return a run's position in the publish order.
+
+    Runs missing from :data:`PUBLISH_ORDER` sort after every known one, keeping
+    a newly trained model at the end of the queue rather than silently ahead of
+    the curated sequence.
+    """
+    return _ORDER_BY_RUN.get(run_name, len(PUBLISH_ORDER))
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict]:
@@ -169,8 +238,14 @@ def pending_checkpoints(
     Returns:
         Checkpoints in publish order.
     """
-    queue = [c for c in found.values() if include_published or c.name not in ledger]
-    queue.sort(key=lambda c: c.modified_at)
+    queue = [
+        c for c in found.values()
+        if (include_published or c.name not in ledger) and c.name not in DUPLICATE_OF
+    ]
+    # Curated order, not mtime: most runs were copied into FinetunedModels/ in
+    # one go and share a meaningless timestamp. Unknown runs fall to the end,
+    # ordered among themselves by age.
+    queue.sort(key=lambda c: (publish_rank(c.name), c.modified_at))
     return queue
 
 
@@ -205,7 +280,9 @@ def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
     return [
         {
             "name": name,
+            "rank": publish_rank(name),
             "subfolder": record.get("subfolder", subfolder_for(name)),
+            "run_name": record.get("run_name", name),
             "imgsz": record.get("imgsz", "?"),
             "metrics": record.get("metrics", {}),
             "held_out": record.get("metrics_from_held_out_eval", True),
@@ -235,7 +312,10 @@ def publish_one(
     """
     subfolder = subfolder_for(checkpoint.name)
     metrics, from_held_out = collect_metrics(checkpoint, split)
-    card = build_variant_card(checkpoint, repo_id, subfolder, split=split)
+    alias = next((dup for dup, canon in DUPLICATE_OF.items()
+                  if canon == checkpoint.name), None)
+    card = build_variant_card(checkpoint, repo_id, subfolder,
+                              split=split, duplicate_of=alias)
     files = files_for(checkpoint)
 
     source = "held-out eval" if from_held_out else "final training epoch"
@@ -250,6 +330,7 @@ def publish_one(
 
     entry = {
         "repo_id": repo_id,
+        "run_name": checkpoint.name,
         "subfolder": subfolder,
         "imgsz": checkpoint.imgsz,
         "metrics": metrics,
@@ -426,6 +507,7 @@ def main(argv: list[str] | None = None) -> int:
             metrics, from_held_out = collect_metrics(checkpoint, args.split)
             preview.setdefault(checkpoint.name, {
                 "subfolder": subfolder_for(checkpoint.name),
+                "run_name": checkpoint.name,
                 "imgsz": checkpoint.imgsz,
                 "metrics": metrics,
                 "metrics_from_held_out_eval": from_held_out,
