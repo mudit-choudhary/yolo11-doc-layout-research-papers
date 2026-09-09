@@ -115,3 +115,31 @@ def test_modified_at_is_timezone_aware(tmp_path):
     make_run(tmp_path, "run_a", imgsz=640)
     stamp = checkpoints.discover(tmp_path)["run_a"].modified_at
     assert stamp.tzinfo is not None
+
+
+def test_discover_many_merges_directories_with_the_first_winning(tmp_path):
+    """models/ and FinetunedModels/ share seven run names; one must win."""
+    curated = tmp_path / "curated"
+    working = tmp_path / "working"
+    make_run(curated, "shared", imgsz=1024)
+    make_run(working, "shared", imgsz=640)
+    make_run(working, "working_only", imgsz=640)
+
+    found = checkpoints.discover_many([curated, working])
+
+    assert set(found) == {"shared", "working_only"}
+    assert found["shared"].imgsz == 1024, "the first directory listed wins"
+    assert found["shared"].run_dir.parent.name == "curated"
+
+
+def test_discover_many_returns_names_sorted(tmp_path):
+    models = tmp_path / "m"
+    for name in ("zeta", "alpha", "mid"):
+        make_run(models, name, imgsz=640)
+    assert list(checkpoints.discover_many([models])) == ["alpha", "mid", "zeta"]
+
+
+def test_discover_many_raises_on_a_missing_directory(tmp_path):
+    make_run(tmp_path / "real", "run_a", imgsz=640)
+    with pytest.raises(FileNotFoundError):
+        checkpoints.discover_many([tmp_path / "real", tmp_path / "absent"])

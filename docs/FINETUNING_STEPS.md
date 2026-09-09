@@ -189,7 +189,7 @@ than VRAM is the constraint, set `--cache disk` or `--cache false`.
 
 An `attempt_02` sweep raised `copy_paste` to 0.2 to 0.3 and `multi_scale` to
 0.23 to 0.5, hoping to increase exposure to rare classes. It regressed **every
-model it was applied to**, by 0.02 to 0.06 mAP50-95, without exception.
+model it was applied to**, by 0.016 to 0.060 mAP50-95, without exception.
 
 Two reasons, and the first is a trap worth remembering:
 

@@ -60,3 +60,5 @@ env/
 # Hugging Face publish ledger: records which runs have already been pushed.
 # Machine-local bookkeeping, not shared state.
 .hf_publish_ledger.json
+
+.claude/

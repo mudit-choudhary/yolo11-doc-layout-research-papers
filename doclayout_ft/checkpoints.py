@@ -156,6 +156,43 @@ def discover(
     return found
 
 
+def discover_many(
+    models_dirs: list[Path],
+    exclude_suffix: str | None = None,
+    include_baselines: bool = True,
+    baseline_suffix: str = "",
+) -> dict[str, Checkpoint]:
+    """Find every model across several directories.
+
+    The same run name can exist in more than one directory: ``models/`` holds
+    working training output and ``FinetunedModels/`` holds a curated copy, and
+    seven runs currently appear in both. The first directory listed wins, so
+    order the arguments most-authoritative first.
+
+    Args:
+        models_dirs: Directories to scan, in priority order.
+        exclude_suffix: Passed through to :func:`discover`.
+        include_baselines: Passed through to :func:`discover`.
+        baseline_suffix: Passed through to :func:`discover`.
+
+    Returns:
+        Mapping of run name to :class:`Checkpoint`, sorted by name.
+
+    Raises:
+        FileNotFoundError: If any listed directory does not exist.
+    """
+    merged: dict[str, Checkpoint] = {}
+    for models_dir in models_dirs:
+        for name, checkpoint in discover(
+            models_dir,
+            exclude_suffix=exclude_suffix,
+            include_baselines=include_baselines,
+            baseline_suffix=baseline_suffix,
+        ).items():
+            merged.setdefault(name, checkpoint)
+    return dict(sorted(merged.items()))
+
+
 def filter_by_name(
     checkpoints: dict[str, Checkpoint],
     only: list[str] | None,

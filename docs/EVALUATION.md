@@ -54,31 +54,41 @@ that matters, since a loose box takes half the next paragraph with it.
 
 ## Results, val split, round_final
 
+All 22 models, scored on the 130-page validation split. Runs ending
+`attempt_02` carry the failed augmentation experiment and are included so the
+regression is visible rather than merely asserted.
+
 | Model | imgsz | Precision | Recall | mAP50 | mAP50-95 |
 |---|---|---|---|---|---|
-| yolo11_doc_layout_v2224_imgsz_1024 | 1024 | 0.881 | 0.910 | 0.939 | **0.772** |
-| **yolo11s_doc_layout_imgsz_1024** | 1024 | 0.935 | 0.913 | 0.945 | **0.769** |
-| yolo11_doc_layout_v222_round03_imgsz_1024 | 1024 | 0.924 | 0.907 | 0.943 | 0.767 |
-| yolo11n_doc_layout_imgsz_1024 | 1024 | 0.921 | 0.883 | 0.940 | 0.766 |
-| yolo11_doc_layout_v2224_round03_imgsz_1024 | 1024 | 0.899 | 0.906 | 0.938 | 0.765 |
-| yolo11_doc_layout_v222_imgsz_1024 | 1024 | 0.887 | 0.888 | 0.926 | 0.762 |
-| yolo11_doc_layout_v22_imgsz_1024 | 1024 | 0.887 | 0.888 | 0.926 | 0.762 |
-| yolo11_doc_layout_v2_imgsz_1024 | 1024 | 0.924 | 0.890 | 0.932 | 0.762 |
-| yolo11_doc_layout_v222_round03 | 640 | 0.897 | 0.844 | 0.918 | 0.744 |
-| yolo11_doc_layout_v2224_round03 | 640 | 0.862 | 0.886 | 0.918 | 0.738 |
-| yolo11_doc_layout_v2224 | 640 | 0.839 | 0.800 | 0.850 | 0.654 |
-| yolo11_doc_layout_v22 | 640 | 0.716 | 0.709 | 0.728 | 0.528 |
-| yolo11_doc_layout_v222 | 640 | 0.716 | 0.709 | 0.728 | 0.528 |
-| yolo11_doc_layout_v2 | 640 | 0.776 | 0.656 | 0.719 | 0.518 |
-| yolo11m_doc_layout (baseline) | 640 | 0.735 | 0.578 | 0.711 | 0.471 |
-| yolo11n_doc_layout (baseline) | 640 | 0.695 | 0.562 | 0.671 | 0.434 |
-| yolo11s_doc_layout (baseline) | 640 | 0.642 | 0.567 | 0.665 | 0.432 |
+| `yolo11_doc_layout_v2224_imgsz_1024` | 1024 | 0.881 | 0.910 | 0.939 | **0.7719** |
+| **`yolo11s_doc_layout_imgsz_1024`** | 1024 | 0.935 | 0.913 | 0.945 | **0.7694** |
+| `yolo11_doc_layout_v222_round03_imgsz_1024` | 1024 | 0.923 | 0.907 | 0.943 | 0.7666 |
+| `yolo11n_doc_layout_imgsz_1024` | 1024 | 0.921 | 0.883 | 0.940 | 0.7661 |
+| `yolo11_doc_layout_v2224_round03_imgsz_1024` | 1024 | 0.899 | 0.906 | 0.938 | 0.7650 |
+| `yolo11_doc_layout_v222_imgsz_1024` | 1024 | 0.887 | 0.888 | 0.926 | 0.7623 |
+| `yolo11_doc_layout_v22_imgsz_1024` | 1024 | 0.887 | 0.888 | 0.926 | 0.7623 |
+| `yolo11_doc_layout_v2_imgsz_1024` | 1024 | 0.924 | 0.890 | 0.932 | 0.7623 |
+| `yolo11s_doc_layout_imgsz_1024_attempt_02` | 1024 | 0.899 | 0.886 | 0.928 | 0.7533 |
+| `yolo11s_doc_layout_attempt_02` | 1024 | 0.891 | 0.883 | 0.937 | 0.7522 |
+| `yolo11_doc_layout_v222_round03` | 640 | 0.897 | 0.844 | 0.918 | 0.7442 |
+| `yolo11_doc_layout_v2224_round03` | 640 | 0.861 | 0.886 | 0.918 | 0.7376 |
+| `yolo11_doc_layout_v222_round03_attempt_02` | 1024 | 0.861 | 0.842 | 0.892 | 0.7138 |
+| `yolo11_doc_layout_v222_imgsz_1024_attempt_02` | 1024 | 0.860 | 0.845 | 0.893 | 0.7108 |
+| `yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02` | 1024 | 0.871 | 0.836 | 0.875 | 0.7070 |
+| `yolo11_doc_layout_v2224` | 640 | 0.839 | 0.800 | 0.850 | 0.6538 |
+| `yolo11_doc_layout_v22` | 640 | 0.716 | 0.709 | 0.728 | 0.5282 |
+| `yolo11_doc_layout_v222` | 640 | 0.716 | 0.709 | 0.728 | 0.5282 |
+| `yolo11_doc_layout_v2` | 640 | 0.776 | 0.656 | 0.719 | 0.5175 |
+| `yolo11m_doc_layout` (baseline) | 640 | 0.735 | 0.578 | 0.711 | 0.4707 |
+| `yolo11n_doc_layout` (baseline) | 640 | 0.695 | 0.562 | 0.671 | 0.4340 |
+| `yolo11s_doc_layout` (baseline) | 640 | 0.641 | 0.567 | 0.665 | 0.4318 |
 
 Fine-tuning takes the base checkpoints from roughly 0.43 to roughly 0.77
 mAP50-95, a 78% relative gain, on a few hundred annotated pages.
 
 `v22` and `v222` score identically because they are the same weights under two
-names, an artefact of the run naming during the sprint.
+names, an artefact of the run naming during the sprint. The same holds for
+`v22_imgsz_1024` and `v222_imgsz_1024`.
 
 ## Best model, per class
 
@@ -127,8 +137,18 @@ The fix is an annotation audit, not more training.
 
 ### Copy-paste augmentation regressed everything
 
-An `attempt_02` sweep raising `copy_paste` and `multi_scale` lost 0.02 to 0.06
-mAP50-95 on every model, without exception. Two causes:
+An `attempt_02` sweep raising `copy_paste` and `multi_scale` lost accuracy on
+every model it touched, without exception. Each `attempt_02` run against the
+checkpoint it was fine-tuned from, on the held-out validation split:
+
+| Starting checkpoint | Base | With attempt_02 | Delta |
+|---|---|---|---|
+| yolo11s_doc_layout_imgsz_1024 | 0.7694 | 0.7533 | -0.0161 |
+| yolo11_doc_layout_v222_round03 | 0.7442 | 0.7138 | -0.0304 |
+| yolo11_doc_layout_v222_imgsz_1024 | 0.7623 | 0.7108 | -0.0515 |
+| yolo11_doc_layout_v222_round03_imgsz_1024 | 0.7666 | 0.7070 | -0.0596 |
+
+Two causes:
 
 1. Ultralytics' `copy_paste_mode="flip"` mirrors each pasted crop even when
    whole-image `fliplr` is off, reintroducing mirrored text at instance level.

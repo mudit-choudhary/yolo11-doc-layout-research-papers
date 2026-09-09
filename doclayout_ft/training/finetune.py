@@ -18,7 +18,7 @@ documents are not natural scenes:
     Pasting instance crops between unrelated pages produces structurally
     impossible layouts, and Ultralytics' default ``copy_paste_mode="flip"``
     mirrors each pasted crop even when whole-image flipping is off. Enabling
-    it regressed every model it was applied to by 0.02 to 0.06 mAP50-95. The
+    it regressed every model it was applied to by 0.016 to 0.060 mAP50-95. The
     flag is still exposed, because the finding is worth being able to
     reproduce, but it defaults off. See docs/FINETUNING_STEPS.md.
 

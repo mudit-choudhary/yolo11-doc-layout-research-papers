@@ -1,32 +1,45 @@
-"""Publish fine-tuned checkpoints to the Hugging Face Hub, oldest first.
+"""Publish fine-tuned checkpoints into a single Hugging Face repository.
 
-This is built for a backlog cleared in instalments rather than one bulk upload.
-Runs are ordered by when their weights were written and published a couple at a
-time; a ledger records what has already gone up, so running the same command
-next week continues where the last one stopped instead of repeating itself.
+Everything goes into **one** Hub repo, with each checkpoint in its own
+subfolder::
 
-Each published repository gets the weights, the run's own ``args.yaml`` and
-``results.csv``, whichever training curves and confusion matrices the run
-produced, and a generated model card. That is enough for someone else to see
-what the checkpoint is, how it was trained and how well it scored, without
-this repository.
+    darkdwine/yolo11-doc-layout-research-papers/
+    ├── README.md                          <- comparison across all variants
+    ├── yolo11s-doc-layout-imgsz-1024/
+    │   ├── README.md                      <- this variant's own card
+    │   ├── best.pt
+    │   ├── args.yaml
+    │   └── ...curves and matrices...
+    └── yolo11n-doc-layout-imgsz-1024/
+        └── ...
+
+One repository rather than fourteen, because these are variants of a single
+model family, not fourteen unrelated models. Someone comparing them should not
+have to open fourteen pages, and the root card puts the comparison table in
+front of them on arrival.
+
+Uploads are staged rather than done in bulk: runs go up oldest first, a couple
+at a time, and a ledger records what has already gone so the same command next
+week continues rather than repeats. The root card is regenerated on every
+publish from the full ledger, so it always describes the whole collection and
+not just the batch that was uploaded.
 
 Authentication comes from the Hugging Face CLI, and is not handled here::
 
     hf auth login          # or: huggingface-cli login
 
 Nothing is uploaded without ``--yes``. The default is a dry run that prints
-exactly what each repository would receive, which is worth reading once before
-the first real push, since a Hub repository is public by default and its
-history is not quietly rewritable.
+exactly what would be written and where, which is worth reading once before the
+first real push, since a Hub repository is public by default and its history is
+not quietly rewritable.
 
 Usage::
 
     python -m doclayout_ft.hub.push_to_hub --list
     python -m doclayout_ft.hub.push_to_hub --limit 2
     python -m doclayout_ft.hub.push_to_hub --limit 2 --yes
+    python -m doclayout_ft.hub.push_to_hub --models-dir FinetunedModels models --list
     python -m doclayout_ft.hub.push_to_hub --only yolo11s_doc_layout_imgsz_1024 --yes
-    python -m doclayout_ft.hub.push_to_hub --only yolo11s_doc_layout_imgsz_1024 --private --yes
 """
 
 from __future__ import annotations
@@ -37,23 +50,28 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from doclayout_ft.checkpoints import Checkpoint, discover, filter_by_name
+from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
 from doclayout_ft.config import FINETUNED_DIR, ROOT
-from doclayout_ft.hub.model_card import build_model_card
+from doclayout_ft.hub.model_card import (
+    build_index_card,
+    build_variant_card,
+    collect_metrics,
+)
 
-#: Hub account or organisation the repositories are created under.
-DEFAULT_NAMESPACE = "darkdwine"
+#: The single repository every checkpoint is published into.
+DEFAULT_REPO_ID = "darkdwine/yolo11-doc-layout-research-papers"
 
 #: How many runs one invocation publishes by default. Sized for a weekly pass
 #: through the backlog rather than a single bulk upload.
 DEFAULT_LIMIT = 2
 
-#: Records which runs have been published, so repeated runs advance the
-#: backlog. Machine-local bookkeeping, and git-ignored: it describes what this
-#: machine has uploaded, which is not a fact about the source tree.
+#: Records which runs are already in the repository, so repeated runs advance
+#: the backlog. It also caches each variant's metrics, so the root card can be
+#: rebuilt from the full collection without re-reading every run directory.
+#: Machine-local bookkeeping, and git-ignored.
 LEDGER_PATH = ROOT / ".hf_publish_ledger.json"
 
-#: Files copied from a run directory when they exist. Weights and the model
+#: Files copied from a run directory when they exist. Weights and the variant
 #: card are handled separately, since they are always required.
 RUN_ARTIFACTS = (
     "args.yaml",
@@ -69,23 +87,23 @@ RUN_ARTIFACTS = (
 )
 
 
-def repo_name_for(run_name: str) -> str:
-    """Derive a Hub repository name from a run name.
+def subfolder_for(run_name: str) -> str:
+    """Derive a variant's subfolder name from its run name.
 
     Underscores become hyphens, which reads better in a URL and matches Hub
-    convention. The transformation is one-to-one, so a repository name can
-    always be traced back to the run that produced it.
+    convention. The transformation is one-to-one, so a subfolder can always be
+    traced back to the run that produced it.
 
     Args:
         run_name: A run directory name, e.g. ``yolo11s_doc_layout_imgsz_1024``.
 
     Returns:
-        A Hub repository name, e.g. ``yolo11s-doc-layout-imgsz-1024``.
+        A subfolder name, e.g. ``yolo11s-doc-layout-imgsz-1024``.
     """
     return run_name.replace("_", "-").lower()
 
 
-def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict[str, str]]:
+def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict]:
     """Read the record of already-published runs.
 
     Args:
@@ -110,34 +128,34 @@ def load_ledger(path: Path = LEDGER_PATH) -> dict[str, dict[str, str]]:
 
 def record_published(
     run_name: str,
-    repo_id: str,
-    url: str,
+    entry: dict,
     path: Path = LEDGER_PATH,
-) -> None:
-    """Add one run to the ledger.
+) -> dict[str, dict]:
+    """Add one run to the ledger and return the updated ledger.
 
     Written after each upload rather than once at the end, so that an
-    interrupted batch does not lose track of the repositories it already
-    created.
+    interrupted batch does not lose track of what it already pushed.
 
     Args:
         run_name: The run that was published.
-        repo_id: Destination repository.
-        url: The repository's URL.
+        entry: Its record: subfolder, imgsz, metrics and repo.
         path: Ledger file.
+
+    Returns:
+        The ledger including the new entry.
     """
     ledger = load_ledger(path)
     ledger[run_name] = {
-        "repo_id": repo_id,
-        "url": url,
+        **entry,
         "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     path.write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n")
+    return ledger
 
 
 def pending_checkpoints(
     found: dict[str, Checkpoint],
-    ledger: dict[str, dict[str, str]],
+    ledger: dict[str, dict],
     include_published: bool,
 ) -> list[Checkpoint]:
     """Order the publish queue, oldest run first.
@@ -157,15 +175,15 @@ def pending_checkpoints(
 
 
 def files_for(checkpoint: Checkpoint) -> list[tuple[Path, str]]:
-    """List the files one run contributes, as (local path, name in the repo).
+    """List the files one run contributes, as (local path, name in its folder).
 
     Args:
         checkpoint: The run being published.
 
     Returns:
-        Pairs of source path and destination filename. Weights are uploaded as
-        ``best.pt`` regardless of run name, so every published repository has
-        the same entry point.
+        Pairs of source path and destination filename, relative to the
+        variant's subfolder. Weights are uploaded as ``best.pt`` regardless of
+        run name, so every variant has the same entry point.
     """
     files: list[tuple[Path, str]] = [(checkpoint.weights, "best.pt")]
     for name in RUN_ARTIFACTS:
@@ -175,60 +193,117 @@ def files_for(checkpoint: Checkpoint) -> list[tuple[Path, str]]:
     return files
 
 
+def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
+    """Turn the ledger into the rows the root card's table needs.
+
+    Args:
+        ledger: The publish ledger.
+
+    Returns:
+        One entry per published variant.
+    """
+    return [
+        {
+            "name": name,
+            "subfolder": record.get("subfolder", subfolder_for(name)),
+            "imgsz": record.get("imgsz", "?"),
+            "metrics": record.get("metrics", {}),
+            "held_out": record.get("metrics_from_held_out_eval", True),
+        }
+        for name, record in ledger.items()
+    ]
+
+
 def publish_one(
+    api,
     checkpoint: Checkpoint,
     repo_id: str,
     split: str,
-    private: bool,
     dry_run: bool,
-) -> str | None:
-    """Create a Hub repository and upload one run into it.
+) -> dict:
+    """Upload one variant into its subfolder of the collection repository.
 
     Args:
+        api: An ``HfApi`` instance, or None on a dry run.
         checkpoint: The run to publish.
-        repo_id: Destination repository, ``namespace/name``.
-        split: Evaluation split whose metrics the model card should quote.
-        private: Whether to create the repository private.
+        repo_id: The collection repository.
+        split: Evaluation split whose metrics the cards should quote.
         dry_run: If True, print the plan and upload nothing.
 
     Returns:
-        The repository URL, or None on a dry run.
+        The ledger entry describing what was published.
     """
-    card = build_model_card(checkpoint, repo_id, split=split)
+    subfolder = subfolder_for(checkpoint.name)
+    metrics, from_held_out = collect_metrics(checkpoint, split)
+    card = build_variant_card(checkpoint, repo_id, subfolder, split=split)
     files = files_for(checkpoint)
 
-    print(f"  repo:       {repo_id} ({'private' if private else 'public'})")
-    print(f"  run age:    {checkpoint.modified_at.date()}")
-    print(f"  model card: {len(card.splitlines())} line(s)")
+    source = "held-out eval" if from_held_out else "final training epoch"
+    print(f"  folder:   {repo_id}/{subfolder}/")
+    print(f"  run age:  {checkpoint.modified_at.date()}   "
+          f"imgsz: {checkpoint.imgsz}   mAP50-95: "
+          f"{metrics.get('mAP50-95', 'n/a')} ({source})")
+    print(f"  writes:   {subfolder}/README.md ({len(card.splitlines())} lines)")
     for path, name in files:
         size_mb = path.stat().st_size / (1024 * 1024)
-        print(f"  upload:     {name:<34} {size_mb:>7.1f} MB")
+        print(f"            {subfolder}/{name:<34} {size_mb:>7.1f} MB")
+
+    entry = {
+        "repo_id": repo_id,
+        "subfolder": subfolder,
+        "imgsz": checkpoint.imgsz,
+        "metrics": metrics,
+        "metrics_from_held_out_eval": from_held_out,
+        "source_dir": str(checkpoint.run_dir.parent),
+    }
 
     if dry_run:
-        return None
+        return entry
 
-    from huggingface_hub import HfApi
+    api.upload_file(
+        path_or_fileobj=card.encode("utf-8"),
+        path_in_repo=f"{subfolder}/README.md",
+        repo_id=repo_id,
+        repo_type="model",
+        commit_message=f"Add {subfolder} model card",
+    )
+    for path, name in files:
+        api.upload_file(
+            path_or_fileobj=str(path),
+            path_in_repo=f"{subfolder}/{name}",
+            repo_id=repo_id,
+            repo_type="model",
+            commit_message=f"Add {subfolder}/{name}",
+        )
+    return entry
 
-    api = HfApi()
-    url = api.create_repo(repo_id=repo_id, repo_type="model",
-                          private=private, exist_ok=True)
 
+def update_index(api, repo_id: str, ledger: dict[str, dict], split: str,
+                 dry_run: bool) -> None:
+    """Regenerate and upload the repository's root card.
+
+    Called after every batch, from the full ledger rather than from the batch,
+    so the comparison table always covers the whole collection.
+
+    Args:
+        api: An ``HfApi`` instance, or None on a dry run.
+        repo_id: The collection repository.
+        ledger: The publish ledger, already updated.
+        split: Evaluation split the metrics came from.
+        dry_run: If True, print what would be written and upload nothing.
+    """
+    card = build_index_card(repo_id, index_entries(ledger), split=split)
+    print(f"Root card: {repo_id}/README.md "
+          f"({len(card.splitlines())} lines, {len(ledger)} variant(s) listed)")
+    if dry_run:
+        return
     api.upload_file(
         path_or_fileobj=card.encode("utf-8"),
         path_in_repo="README.md",
         repo_id=repo_id,
         repo_type="model",
-        commit_message="Add model card",
+        commit_message=f"Update index for {len(ledger)} variant(s)",
     )
-    for path, name in files:
-        api.upload_file(
-            path_or_fileobj=str(path),
-            path_in_repo=name,
-            repo_id=repo_id,
-            repo_type="model",
-            commit_message=f"Add {name}",
-        )
-    return str(url)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -237,26 +312,28 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--models-dir", type=Path, default=FINETUNED_DIR,
-                        help="Directory of runs to publish (default: FinetunedModels/)")
-    parser.add_argument("--namespace", default=DEFAULT_NAMESPACE,
-                        help=f"Hub account or organisation (default: {DEFAULT_NAMESPACE})")
-    parser.add_argument("--repo-id", default=None,
-                        help="Full repo id for a single upload, overriding --namespace. "
-                             "Only valid with exactly one --only.")
+    parser.add_argument("--models-dir", type=Path, nargs="+", default=[FINETUNED_DIR],
+                        help="Directories of runs to publish, most authoritative "
+                             "first (default: FinetunedModels/). Pass both "
+                             "FinetunedModels and models to include the "
+                             "attempt_02 runs.")
+    parser.add_argument("--repo-id", default=DEFAULT_REPO_ID,
+                        help=f"The single collection repository every variant is "
+                             f"published into (default: {DEFAULT_REPO_ID})")
     parser.add_argument("--only", nargs="+", default=None,
                         help="Publish these run names instead of the oldest pending ones")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT,
-                        help=f"How many runs to publish this pass (default: {DEFAULT_LIMIT})")
+                        help=f"How many runs to publish this pass (default: "
+                             f"{DEFAULT_LIMIT}); 0 for all pending")
     parser.add_argument("--split", default="val",
-                        help="Evaluation split the model cards should quote (default: val)")
+                        help="Evaluation split the cards should quote (default: val)")
     parser.add_argument("--private", action="store_true",
-                        help="Create the repositories private")
+                        help="Create the repository private (first publish only)")
     parser.add_argument("--include-published", action="store_true",
                         help="Do not skip runs already in the ledger")
-    parser.add_argument("--no-baselines", action="store_true", default=True,
-                        help="Skip never-fine-tuned checkpoints (default: on; these "
-                             "belong to their original authors, not this project)")
+    parser.add_argument("--refresh-index", action="store_true",
+                        help="Regenerate and upload only the root card, publishing "
+                             "no new variants")
     parser.add_argument("--list", action="store_true",
                         help="Show the publish queue and the ledger, then exit")
     parser.add_argument("--yes", action="store_true",
@@ -267,64 +344,101 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns a process exit code."""
     args = build_parser().parse_args(argv)
+    ledger = load_ledger()
 
-    if args.repo_id and (not args.only or len(args.only) != 1):
-        print("error: --repo-id names a single repository, so it requires "
-              "exactly one --only run name.", file=sys.stderr)
-        return 1
+    if args.refresh_index:
+        if not ledger:
+            print("Nothing published yet, so there is no index to refresh.",
+                  file=sys.stderr)
+            return 1
+        api = None
+        if args.yes:
+            from huggingface_hub import HfApi
+            api = HfApi()
+            api.create_repo(repo_id=args.repo_id, repo_type="model",
+                            private=args.private, exist_ok=True)
+        update_index(api, args.repo_id, ledger, args.split, not args.yes)
+        return 0
 
     try:
-        found = discover(args.models_dir, include_baselines=not args.no_baselines)
+        found = discover_many(args.models_dir, include_baselines=False)
         found = filter_by_name(found, args.only)
     except (FileNotFoundError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
     if not found:
-        print(f"No runs found under {args.models_dir}", file=sys.stderr)
+        dirs = ", ".join(str(d) for d in args.models_dir)
+        print(f"No fine-tuned runs found under {dirs}", file=sys.stderr)
         return 1
 
-    ledger = load_ledger()
     queue = pending_checkpoints(found, ledger, args.include_published or bool(args.only))
 
     if args.list:
-        print(f"Published already ({len(ledger)}):")
+        print(f"Repository: {args.repo_id}\n")
+        print(f"Discovered {len(found)} run(s) across "
+              f"{', '.join(str(d.name) for d in args.models_dir)}\n")
+        print(f"Already published ({len(ledger)}):")
         for name, record in sorted(ledger.items()):
-            print(f"  {name:<50} {record.get('repo_id', '?')}")
+            print(f"  {name:<52} -> {record.get('subfolder', '?')}/")
         print(f"\nPending, oldest first ({len(queue)}):")
         for checkpoint in queue:
-            print(f"  {checkpoint.modified_at.date()}  {checkpoint.name:<50} "
-                  f"-> {args.namespace}/{repo_name_for(checkpoint.name)}")
+            print(f"  {checkpoint.modified_at.date()}  {checkpoint.name:<52} "
+                  f"-> {subfolder_for(checkpoint.name)}/")
         return 0
 
     if not queue:
-        print("Nothing pending. Every run under "
-              f"{args.models_dir} is already in the ledger.")
+        print("Nothing pending. Every discovered run is already in the ledger.")
         return 0
 
     batch = queue[: args.limit] if args.limit > 0 else queue
 
     mode = "PUBLISHING" if args.yes else "DRY RUN (pass --yes to upload)"
-    print(f"{mode}: {len(batch)} of {len(queue)} pending run(s), oldest first.\n")
+    print(f"{mode}\nRepository: {args.repo_id}")
+    print(f"Batch: {len(batch)} of {len(queue)} pending run(s), oldest first.\n")
+
+    api = None
+    if args.yes:
+        from huggingface_hub import HfApi
+        api = HfApi()
+        url = api.create_repo(repo_id=args.repo_id, repo_type="model",
+                              private=args.private, exist_ok=True)
+        print(f"Repository ready: {url}\n")
 
     failures: list[tuple[str, Exception]] = []
     for index, checkpoint in enumerate(batch, start=1):
-        repo_id = args.repo_id or f"{args.namespace}/{repo_name_for(checkpoint.name)}"
         print(f"=== [{index}/{len(batch)}] {checkpoint.name} ===")
         try:
-            url = publish_one(checkpoint, repo_id, args.split, args.private, not args.yes)
-            if url is not None:
-                record_published(checkpoint.name, repo_id, url)
-                print(f"  published:  {url}")
+            entry = publish_one(api, checkpoint, args.repo_id, args.split, not args.yes)
+            if args.yes:
+                ledger = record_published(checkpoint.name, entry)
         except Exception as exc:  # noqa: BLE001 - one failure must not sink the batch
             failures.append((checkpoint.name, exc))
             print(f"  FAILED: {exc}", file=sys.stderr)
         print()
 
+    # Rebuild the root card from the whole ledger, including entries from
+    # earlier weeks, so the comparison table is never partial. On a dry run
+    # this previews the index as it would look after the batch.
+    preview = dict(ledger)
+    if not args.yes:
+        for checkpoint in batch:
+            metrics, from_held_out = collect_metrics(checkpoint, args.split)
+            preview.setdefault(checkpoint.name, {
+                "subfolder": subfolder_for(checkpoint.name),
+                "imgsz": checkpoint.imgsz,
+                "metrics": metrics,
+                "metrics_from_held_out_eval": from_held_out,
+            })
+    if preview:
+        update_index(api, args.repo_id, preview, args.split, not args.yes)
+
     remaining = len(queue) - len(batch)
+    print()
     if args.yes:
-        print(f"Published {len(batch) - len(failures)} run(s). "
-              f"{remaining} still pending; run this again to continue.")
+        print(f"Published {len(batch) - len(failures)} variant(s) into "
+              f"{args.repo_id}. {remaining} still pending; run this again to "
+              f"continue.")
     else:
         print(f"Dry run complete. {remaining} run(s) would remain after this batch.")
 

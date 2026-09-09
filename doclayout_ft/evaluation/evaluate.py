@@ -42,7 +42,7 @@ import csv
 import sys
 from pathlib import Path
 
-from doclayout_ft.checkpoints import Checkpoint, discover, filter_by_name
+from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
 from doclayout_ft.config import (
     DEFAULT_ROUND,
     FINETUNED_DIR,
@@ -188,8 +188,10 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--models-dir", type=Path, default=FINETUNED_DIR,
-                        help="Directory of models to evaluate (default: FinetunedModels/)")
+    parser.add_argument("--models-dir", type=Path, nargs="+", default=[FINETUNED_DIR],
+                        help="Directories of models to evaluate, most authoritative "
+                             "first (default: FinetunedModels/). Pass both "
+                             "FinetunedModels and models to include the attempt_02 runs.")
     parser.add_argument("--round", default=DEFAULT_ROUND,
                         help=f"Dataset round to evaluate against (default: {DEFAULT_ROUND})")
     parser.add_argument("--split", choices=sorted(ULTRALYTICS_SPLIT), default="val",
@@ -222,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        found = discover(
+        found = discover_many(
             args.models_dir,
             include_baselines=not args.no_baselines,
             baseline_suffix="_baseline",
@@ -233,7 +235,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if not found:
-        print(f"No models found under {args.models_dir}", file=sys.stderr)
+        dirs = ", ".join(str(d) for d in args.models_dir)
+        print(f"No models found under {dirs}", file=sys.stderr)
         return 1
 
     print(f"Evaluating {len(found)} model(s) on split '{args.split}' ({dataset_yaml}):")

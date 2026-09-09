@@ -17,6 +17,7 @@ Everything here runs on a single 4 GB GPU.
 | mAP50-95 | 0.769 on held-out validation |
 | Base checkpoint | [`Armaggheddon/yolo11-document-layout`](https://huggingface.co/Armaggheddon/yolo11-document-layout) |
 | Training data | 850 hand-annotated pages from 566 arXiv papers |
+| Unlabelled pool | ~22,000 rendered pages from 1128 PDFs, not used for training |
 | Hardware | GTX 1650, 4 GB VRAM |
 
 One checkpoint, `yolo11_doc_layout_v2224_imgsz_1024`, scores marginally higher
@@ -24,6 +25,12 @@ at 0.772, but it was fine-tuned through the discarded `round_03` split and its
 lineage cannot be trusted. `yolo11s_doc_layout_imgsz_1024` is recommended
 instead: it is the strongest model with a clean training history, and it leads
 on the classes that decide chunk boundaries.
+
+Only a labelled subset of the corpus is used. The 1128 source PDFs render to
+roughly 22,000 page images; 850 of those pages, across 566 papers, are
+annotated and make up the training, validation and test splits. The rest of the
+pool is unlabelled and exists so later annotation rounds have material to draw
+on.
 
 ## Quick start
 
@@ -55,7 +62,7 @@ That writes one JSON of detected regions and one annotated preview per page.
 | `tests/` | Test suite. No GPU or dataset required. |
 | `reports/` | Evaluation tables and charts. |
 | `training_dataset/` | Dataset rounds. Configs tracked, images and labels not. |
-| `PDFs/`, `images/` | Source papers and rendered pages. Untracked, 24 GB. |
+| `PDFs/`, `images/` | Source papers and the full rendered page pool. Untracked, 24 GB. |
 | `models/`, `FinetunedModels/` | Training runs and weights. Untracked. |
 
 ## The pipeline
@@ -87,7 +94,7 @@ python -m doclayout_ft.evaluation.evaluate --split val
 # 7. Break the best one down by class
 python -m doclayout_ft.evaluation.per_class
 
-# 8. Publish to the Hugging Face Hub
+# 8. Publish to one Hugging Face repo, two variants at a time
 python -m doclayout_ft.hub.push_to_hub --limit 2 --yes
 ```
 
@@ -125,8 +132,8 @@ in [docs/SPRINT_REPORT.md](docs/SPRINT_REPORT.md).
   chunking, at roughly five times the training time.
 - **`yolo11m` could not be trained on this hardware.** It runs out of memory
   below batch size 2, and batch size 1 makes batch-norm statistics unreliable.
-- **Copy-paste augmentation regressed every model it touched**, by 0.02 to 0.06
-  mAP50-95. It composites regions between unrelated pages, which produces
+- **Copy-paste augmentation regressed every model it touched**, by 0.016 to
+  0.060 mAP50-95. It composites regions between unrelated pages, which produces
   layouts that cannot occur, and Ultralytics mirrors each pasted crop even when
   whole-image flipping is off.
 - **`Page-footer` is a labelling problem, not a model problem.** It is found
