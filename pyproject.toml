@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doclayout-ft"
+version = "1.0.0"
+description = "Fine-tuning YOLOv11 for document-layout detection on research papers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-only" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+# torch is intentionally absent: the right build depends on your CUDA driver
+# and must be installed separately. See requirements.txt.
+dependencies = [
+    "ultralytics>=8.4,<9",
+    "PyYAML>=6.0",
+    "matplotlib>=3.8",
+    "huggingface_hub>=0.30",
+    "pdf2image>=1.17",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+# Console entry points, so the pipeline can be driven without `python -m`
+# once the package is installed.
+[project.scripts]
+doclayout-pdf2img = "doclayout_ft.data.pdf_to_images:main"
+doclayout-batch = "doclayout_ft.data.make_batches:main"
+doclayout-split = "doclayout_ft.data.split_dataset:main"
+doclayout-download = "doclayout_ft.training.download_base_models:main"
+doclayout-finetune = "doclayout_ft.training.finetune:main"
+doclayout-evaluate = "doclayout_ft.evaluation.evaluate:main"
+doclayout-perclass = "doclayout_ft.evaluation.per_class:main"
+doclayout-predict = "doclayout_ft.inference.predict:main"
+doclayout-push = "doclayout_ft.hub.push_to_hub:main"
+
+[tool.setuptools.packages.find]
+include = ["doclayout_ft*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

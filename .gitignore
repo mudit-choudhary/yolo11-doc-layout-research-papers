@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# Large data. None of this belongs in git; see docs/DATASET.md for how to
+# rebuild it from scratch.
+# ---------------------------------------------------------------------------
+
+# Source PDFs (~4.4 GB) and the page images rendered from them (~19 GB).
+PDFs/
+images/
+
+# Annotated dataset rounds (~1.4 GB). The per-round data.yaml and classes.txt
+# ARE tracked (see the un-ignore rules below) because they are configuration,
+# not data; the images, labels and derived split lists are not.
+training_dataset/*/images/
+training_dataset/*/labels/
+training_dataset/*/*.cache
+training_dataset/*/train.txt
+training_dataset/*/val.txt
+training_dataset/*/test.txt
+training_dataset/*/combined.txt
+
+# Training run outputs: weights, curves, batch mosaics (~780 MB).
+# Weights are distributed through the Hugging Face Hub instead; see
+# docs/PUBLISHING_TO_HF.md.
+models/
+FinetunedModels/
+runs/
+
+# Inference output from doclayout_ft.inference.predict.
+predictions/
+*.pt
+*.onnx
+*.engine
+*.torchscript
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# ---------------------------------------------------------------------------
+# Tooling and editors
+# ---------------------------------------------------------------------------
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.vscode/
+.idea/
+.DS_Store
+
+# Local Claude Code permissions, machine-specific.
+.claude/settings.local.json
+
+# Hugging Face publish ledger: records which runs have already been pushed.
+# Machine-local bookkeeping, not shared state.
+.hf_publish_ledger.json

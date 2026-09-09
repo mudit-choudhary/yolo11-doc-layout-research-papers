@@ -1,0 +1,12 @@
+Caption
+Footnote
+Formula
+List-item
+Page-footer
+Page-header
+Picture
+Section-header
+Table
+Text
+Title
+Authors

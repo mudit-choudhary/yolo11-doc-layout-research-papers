@@ -1,0 +1,18 @@
+# Pointing to the "Clean" symlink path
+path: /media/mudit/DarkDwine1/ResearchPapersYOLO_FT/training_dataset/round_02
+train: images
+val: images
+
+names:
+  0: Caption
+  1: Footnote
+  2: Formula
+  3: List-item
+  4: Page-footer
+  5: Page-header
+  6: Picture
+  7: Section-header
+  8: Table
+  9: Text
+  10: Title
+  11: Authors

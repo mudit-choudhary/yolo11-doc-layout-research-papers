@@ -1,0 +1,32 @@
+# Runtime dependencies for the doclayout_ft pipeline.
+#
+# PyTorch is deliberately NOT pinned here. The correct build depends on your
+# CUDA driver, and installing the wrong one is the single most common way to
+# break this project. Install it first, from the selector at
+# https://pytorch.org/get-started/locally/, then install this file.
+#
+# On the reference machine (GTX 1650, driver 535.x / CUDA 12.2) the working
+# combination is the cu118 build:
+#
+#     pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 \
+#         --index-url https://download.pytorch.org/whl/cu118
+#
+# See docs/SETUP.md for the full story, including why a newer CUDA build fails
+# against this driver.
+
+# Training, validation and inference.
+ultralytics>=8.4,<9
+
+# Dataset config parsing and evaluation tables.
+PyYAML>=6.0
+matplotlib>=3.8
+
+# Downloading base checkpoints and publishing fine-tuned ones.
+huggingface_hub>=0.30
+
+# PDF page rendering. Also needs the Poppler binaries, which pip cannot
+# install: sudo apt install poppler-utils
+pdf2image>=1.17
+
+# Progress reporting during long batch jobs.
+tqdm>=4.66
