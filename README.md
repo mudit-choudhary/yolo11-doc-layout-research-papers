@@ -132,10 +132,16 @@ in [docs/SPRINT_REPORT.md](docs/SPRINT_REPORT.md).
   chunking, at roughly five times the training time.
 - **`yolo11m` could not be trained on this hardware.** It runs out of memory
   below batch size 2, and batch size 1 makes batch-norm statistics unreliable.
-- **Copy-paste augmentation regressed every model it touched**, by 0.016 to
-  0.060 mAP50-95. It composites regions between unrelated pages, which produces
-  layouts that cannot occur, and Ultralytics mirrors each pasted crop even when
-  whole-image flipping is off.
+- **The `attempt_02` augmentation sweep regressed every model it touched**, by
+  0.016 to 0.060 mAP50-95. It changed seven settings at once, so it condemns the
+  bundle rather than any one setting. `copy_paste` is the prime suspect on
+  mechanistic grounds: Ultralytics mirrors each pasted crop even when
+  whole-image flipping is off, and compositing regions between unrelated pages
+  produces layouts that cannot occur.
+- **The best models used Ultralytics' stock flipping and erasing.** Turning
+  those off is well argued for documents, but it was only ever tried inside the
+  failed bundle, so it remains untested here. The fine-tuning defaults match the
+  best run rather than the better argument.
 - **`Page-footer` is a labelling problem, not a model problem.** It is found
   reliably and bounded loosely, at 0.36 mAP50-95 against 0.75 overall,
   identically across every size and resolution tried.

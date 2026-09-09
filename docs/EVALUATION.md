@@ -135,11 +135,10 @@ not. The model cannot learn a boundary the annotations do not agree on.
 
 The fix is an annotation audit, not more training.
 
-### Copy-paste augmentation regressed everything
+### The attempt_02 sweep regressed everything, but does not say why
 
-An `attempt_02` sweep raising `copy_paste` and `multi_scale` lost accuracy on
-every model it touched, without exception. Each `attempt_02` run against the
-checkpoint it was fine-tuned from, on the held-out validation split:
+Every `attempt_02` run scored below the checkpoint it was fine-tuned from, on
+the held-out validation split:
 
 | Starting checkpoint | Base | With attempt_02 | Delta |
 |---|---|---|---|
@@ -148,16 +147,70 @@ checkpoint it was fine-tuned from, on the held-out validation split:
 | yolo11_doc_layout_v222_imgsz_1024 | 0.7623 | 0.7108 | -0.0515 |
 | yolo11_doc_layout_v222_round03_imgsz_1024 | 0.7666 | 0.7070 | -0.0596 |
 
-Two causes:
+The direction is consistent and the effect is not small. What it cannot do is
+name a cause, because **the sweep changed seven settings at once**. Read from
+the runs' own `args.yaml`, against their parents:
 
-1. Ultralytics' `copy_paste_mode="flip"` mirrors each pasted crop even when
-   whole-image `fliplr` is off, reintroducing mirrored text at instance level.
-2. Compositing regions between unrelated pages produces layouts that cannot
-   occur. Spatial relationships between document regions carry signal, and
-   copy-paste destroys it.
+| Setting | Before | After | Expected effect |
+|---|---|---|---|
+| `copy_paste` | 0.0 | 0.2 – 0.3 | Suspect |
+| `multi_scale` | 0.0 | 0.23 – 0.5 | Suspect |
+| `fliplr` | 0.5 | 0.0 | Should **help** a document task |
+| `erasing` | 0.4 | 0.0 | Should **help** rare classes |
+| `epochs` | 100 – 150 | 210 | Neutral; early stopping governs |
+| `patience` | 45 | 60 | Neutral |
+| `batch` | 3 – 5 | 2 – 3 | Minor; see below |
 
-A consistent regression across every model is a finding, not noise. Do not use
-copy-paste for document layout.
+Two of those changes were expected to improve things, which makes the result
+more interesting rather than less. If disabling horizontal flip and random
+erasing genuinely helps a document task, then whatever `copy_paste` and
+`multi_scale` cost is **larger** than the measured delta, because it had to
+overcome two improvements to land where it did.
+
+The batch reduction is a weak confound. Ultralytics accumulates gradients to a
+nominal batch of 64 (`nbs: 64`) regardless of the micro-batch, so the effective
+optimisation batch did not change. Batch-norm statistics still come from the
+micro-batch, so 2 is noisier than 5, but this is a second-order effect next to
+an augmentation change of this size.
+
+Epoch count is not the explanation either. Two of the three cleanest
+`attempt_02` runs early-stopped **sooner** than their parents despite a higher
+cap and higher patience (73 against 93, and 61 against 101). They plateaued
+earlier and lower. The third ran far longer, 189 against 100, and still
+finished worse.
+
+So the honest conclusion is narrower than "copy-paste is bad":
+
+**`copy_paste` and `multi_scale`, applied together at these strengths, cost
+0.016 to 0.060 mAP50-95 on this task. Which of the two is responsible, or
+whether it takes both, was never isolated.**
+
+The mechanistic case against `copy_paste` specifically is still worth stating,
+because it is independent of this experiment. The runs recorded
+`copy_paste_mode: flip`, which mirrors each pasted instance crop *even when
+whole-image `fliplr` is 0*. So these runs reintroduced mirrored text at the
+instance level while believing they had turned mirroring off. Separately,
+compositing regions from unrelated pages produces layouts that cannot occur,
+and the spatial relationships between document regions carry real signal.
+
+That argument is a reason to be suspicious, not a measurement. Isolating it
+needs one run changing `copy_paste` alone.
+
+### The fliplr and erasing settings are untested here
+
+Worth being explicit, because the reasoning is seductive. Disabling horizontal
+flip on a document task is a well-argued idea: a mirrored page never occurs at
+inference. Lowering random erasing to protect rare classes is similarly
+plausible.
+
+Neither has been tested in isolation in this project. Both appear only inside
+the `attempt_02` bundle, alongside the changes that regressed. **Every model
+that scored well here was trained with Ultralytics' defaults, `fliplr=0.5` and
+`erasing=0.4`**, including the recommended `yolo11s_doc_layout_imgsz_1024`.
+
+The fine-tuning defaults therefore match the best run rather than the better
+argument. Reproducing a published model matters more than acting on untested
+reasoning. Both remain flags, and isolating them is cheap: one run each.
 
 ### yolo11s over yolo11n, narrowly
 

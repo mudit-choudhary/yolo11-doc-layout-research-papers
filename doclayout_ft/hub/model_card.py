@@ -266,9 +266,12 @@ through a dataset round whose train and validation splits overlapped, so its
 lineage cannot be trusted. It is published for completeness, not for use.
 
 Variants ending in `attempt_02` are **deliberately published failures**. They
-carry a copy-paste and multi-scale augmentation setting that regressed every
-model it was applied to, by 0.016 to 0.060 mAP50-95. They are here so the result
-is reproducible, not because they are worth deploying.
+carry an augmentation bundle that regressed every model it was applied to, by
+0.016 to 0.060 mAP50-95. They are here so the result is reproducible, not
+because they are worth deploying. That sweep changed seven settings at once, so
+it identifies a harmful combination rather than a single culprit; `copy_paste`
+at `copy_paste_mode="flip"` is the prime suspect, since it mirrors pasted crops
+even when whole-image flipping is disabled.
 
 ## Variants
 
@@ -475,12 +478,11 @@ trained at.
 
 {_training_section(checkpoint)}
 
-Two augmentation settings deviate from the Ultralytics defaults, both because
-documents are not natural scenes. Horizontal flipping is disabled, since a
-mirrored page never occurs at inference and mirrored text destroys the
-left-to-right structure the model relies on. Copy-paste augmentation is
-disabled, because pasting region crops between unrelated pages produces
-structurally impossible layouts.
+The strongest models in this collection were trained with Ultralytics' stock
+augmentation, `copy_paste` and `multi_scale` left off. Disabling horizontal flip
+and random erasing is well argued for documents, since a mirrored page never
+occurs at inference, but it was never tested in isolation here, so it is not
+treated as an established improvement.
 
 ## Files
 

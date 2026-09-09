@@ -153,23 +153,31 @@ out-of-memory error, re-running resumes from there.
 **`--imgsz 1024`**, against a default of 640. The largest single accuracy gain
 in this project, roughly +0.03 mAP50-95, concentrated in the small classes.
 `Footnote`, `Page-header` and `Page-footer` are a few pixels tall once a
-2550-pixel-wide page is scaled to 640.
+2550-pixel-wide page is scaled to 640. This one is measured across the whole
+checkpoint lineage and is safe to rely on.
 
-**`--fliplr 0.0`**, against a default of 0.5. Ultralytics mirrors half of all
-training images. A mirrored page never occurs at inference, and mirrored text
-destroys the left-to-right structure that distinguishes a caption from a list
-item. This is free accuracy on any document task.
+**`--epochs 210 --patience 60`.** A generous cap with early stopping, so a
+slow-converging run has room and a converged one stops.
 
-**`--copy-paste 0.0`**, against an Ultralytics default that is also 0. It is
-called out because raising it was tried, deliberately, and it failed. See
-below.
-
-**`--erasing 0.0`**, against a default of 0.4. Random erasing can remove the
-only instance of a rare class from a page, which for `Authors` or `Footnote`
-means training on a page labelled for something no longer visible.
+Everything else matches Ultralytics, deliberately. The augmentation defaults
+here (`fliplr=0.5`, `erasing=0.4`, `copy_paste=0.0`, `multi_scale=0.0`)
+reproduce `yolo11s_doc_layout_imgsz_1024`, the strongest model in the project.
 
 **AMP** is left to Ultralytics. On a GTX 1650 its sanity check fails and
 training falls back to FP32, which is why memory is tighter than 4 GB suggests.
+
+### The augmentation settings people are tempted to change
+
+There is a good a priori argument for `--fliplr 0.0` on documents: a mirrored
+page never occurs at inference, and mirrored text destroys the left-to-right
+structure that distinguishes a caption from a list item. The parallel argument
+says `--erasing 0.0`, since erasing can remove the only instance of a rare
+class from a page.
+
+Both are plausible. **Neither has been tested here in isolation**, and every
+model that scored well used the Ultralytics defaults for them. They are
+available as flags and would be a cheap, worthwhile experiment: one run each,
+changing nothing else.
 
 ### Batch size and memory
 
@@ -187,26 +195,27 @@ than VRAM is the constraint, set `--cache disk` or `--cache false`.
 
 ### The augmentation experiment that failed
 
-An `attempt_02` sweep raised `copy_paste` to 0.2 to 0.3 and `multi_scale` to
-0.23 to 0.5, hoping to increase exposure to rare classes. It regressed **every
-model it was applied to**, by 0.016 to 0.060 mAP50-95, without exception.
+An `attempt_02` sweep raised `copy_paste` to 0.2 – 0.3 and `multi_scale` to
+0.23 – 0.5. It regressed **every model it was applied to**, by 0.016 to 0.060
+mAP50-95, without exception.
 
-Two reasons, and the first is a trap worth remembering:
+It also changed five other things at the same time: `fliplr` 0.5 to 0.0,
+`erasing` 0.4 to 0.0, more epochs, higher patience, and a smaller batch. So the
+sweep proves the bundle is harmful, not which part of it is. Two of those
+changes were expected to *help*, which means the cost of whatever did the
+damage is larger than the measured delta.
 
-1. Ultralytics' default `copy_paste_mode="flip"` mirrors each pasted instance
-   crop *even when whole-image `fliplr` is disabled*. Turning off flipping at
-   the image level does not turn it off at the instance level, so mirrored text
-   came back in through the side door.
-2. Copy-paste composites regions from unrelated pages into positions that
-   cannot occur. In natural-scene detection, its original setting, a cat may
-   legitimately appear anywhere. In a document, the spatial relationship
-   between regions carries real signal, and destroying it destroys information
-   the model was using.
+The mechanistic suspicion falls on `copy_paste`, for a reason independent of
+the experiment: the runs recorded `copy_paste_mode: flip`, which mirrors each
+pasted instance crop *even when whole-image `fliplr` is 0*. These runs
+reintroduced mirrored text at the instance level while believing they had
+turned mirroring off. Copy-paste also composites regions from unrelated pages
+into positions that cannot occur, and in a document, unlike a natural scene,
+the spatial relationship between regions carries real signal.
 
-**Do not use copy-paste for document layout.** Rare-class exposure should come
-from more annotated real pages.
-
----
+**Practical advice: leave `copy_paste` and `multi_scale` off**, which is the
+default and matches every run that scored well. If you want to know which one
+matters, change one at a time. See docs/EVALUATION.md.
 
 ## Step 7 — Evaluate
 
