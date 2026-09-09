@@ -53,7 +53,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
-from doclayout_ft.config import FINETUNED_DIR, MODELS_DIR, ROOT
+from doclayout_ft.config import FINETUNED_DIR, MODELS_DIR, REPORTS_DIR, ROOT
+from doclayout_ft.hub.charts import build_comparison_chart, build_per_class_chart
 from doclayout_ft.hub.model_card import (
     build_index_card,
     build_variant_card,
@@ -66,6 +67,11 @@ DEFAULT_REPO_ID = "darkdwine/yolo11-doc-layout-research-papers"
 #: How many runs one invocation publishes by default. Sized for a weekly pass
 #: through the backlog rather than a single bulk upload.
 DEFAULT_LIMIT = 2
+
+#: Charts shown on the root card. Regenerated whenever the card is, so they can
+#: never disagree with the table beside them. Written into reports/ and uploaded
+#: to the repository root, which the card references by relative path.
+INDEX_CHARTS = ("comparison.png", "per-class.png")
 
 #: Records which runs are already in the repository, so repeated runs advance
 #: the backlog. It also caches each variant's metrics, so the root card can be
@@ -441,8 +447,20 @@ def update_index(api, repo_id: str, ledger: dict[str, dict], split: str,
     card = build_index_card(repo_id, index_entries(ledger), split=split)
     print(f"Root card: {repo_id}/README.md "
           f"({len(card.splitlines())} lines, {len(ledger)} variant(s) listed)")
+    charts: list[Path] = []
+    for name, builder in zip(INDEX_CHARTS,
+                             (build_comparison_chart, build_per_class_chart)):
+        try:
+            charts.append(builder(REPORTS_DIR / name))
+            print(f"           {name} regenerated")
+        except FileNotFoundError as exc:
+            # A missing input is worth skipping a chart over, not worth
+            # failing a publish for.
+            print(f"           {name} SKIPPED: {exc}", file=sys.stderr)
+
     if dry_run:
         return
+
     api.upload_file(
         path_or_fileobj=card.encode("utf-8"),
         path_in_repo="README.md",
@@ -450,6 +468,14 @@ def update_index(api, repo_id: str, ledger: dict[str, dict], split: str,
         repo_type="model",
         commit_message=f"Update index for {len(ledger)} variant(s)",
     )
+    for chart in charts:
+        api.upload_file(
+            path_or_fileobj=str(chart),
+            path_in_repo=chart.name,
+            repo_id=repo_id,
+            repo_type="model",
+            commit_message=f"Update {chart.name}",
+        )
 
 
 def preflight(repo_id: str) -> bool:

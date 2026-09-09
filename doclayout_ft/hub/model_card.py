@@ -321,6 +321,11 @@ even when whole-image flipping is disabled.
 
 ## Variants
 
+![Horizontal bar chart ranking every published variant by mAP50-95 on the
+held-out validation split. The recommended 12-yolo11s-1024 is highlighted in
+blue; the five failed augmentation experiments are hatched. Scores run from
+0.518 to 0.772, with the top seven within 0.01 of each other.](comparison.png)
+
 {table}
 
 Measured on the held-out `{split}` split unless marked otherwise, each at the
@@ -328,6 +333,18 @@ image size it was trained at. `mAP50-95` is the number worth reading: `mAP50` co
 when it overlaps the ground truth by half, which flatters a model that finds a
 region without bounding it tightly, and tight bounds are exactly what a
 chunking consumer needs.
+
+### Where the recommended model is strong and weak
+
+![Horizontal bar chart of per-class mAP50-95 for 12-yolo11s-1024. Table 0.985,
+List-item 0.926 and Text 0.918 lead; Page-footer trails far behind at 0.360
+against an overall 0.769.](per-class.png)
+
+The headline number is an average over twelve classes that range from 0.985 to
+0.360, so it hides more than it shows. `Table` and `Text`, the two classes that
+most affect where a chunk boundary falls, are the strongest. `Page-footer` is
+the one real weakness, and it is a labelling problem rather than a model one:
+see Limitations.
 
 ## Usage
 

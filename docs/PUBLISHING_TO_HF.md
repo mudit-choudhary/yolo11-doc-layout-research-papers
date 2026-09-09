@@ -225,6 +225,36 @@ python -m doclayout_ft.hub.push_to_hub --refresh-index --yes
 That rewrites only the root `README.md`, uploads no weights, and takes seconds.
 It covers every variant in the ledger, including ones published weeks earlier.
 
+## The charts
+
+The root card carries two charts, regenerated from `reports/` every time the
+card is rebuilt so they can never disagree with the table beside them:
+
+| File | Shows |
+|---|---|
+| `comparison.png` | Every published variant ranked by mAP50-95 |
+| `per-class.png` | The recommended model class by class |
+
+Both come from `doclayout_ft/hub/charts.py`. They are uploaded to the repository
+root, which the card references by relative path.
+
+Bars start at zero, so the values cluster. That is the finding rather than a
+defect: most of these models are within noise of each other, and cropping the
+axis to manufacture separation would misrepresent them.
+
+The recommended model is the only one in colour, with everything else in gray
+and the failed experiments hatched. One model is the point of the chart and the
+rest are context; painting all seventeen in identity colours would bury the row
+a reader actually needs. The hatching rather than a third hue keeps the
+distinction visible in greyscale and to colour-blind readers.
+
+Both render on a light background. A card is shown on a page whose theme the
+reader controls and a PNG cannot adapt, so an opaque light image is the option
+that stays legible either way.
+
+If a chart's input is missing, the publish prints a warning and continues
+rather than failing.
+
 ## The cards
 
 Generated from what each run recorded, not written by hand, so they cannot
