@@ -543,3 +543,27 @@ def test_preflight_never_blocks_publishing(monkeypatch):
     source = inspect.getsource(push_to_hub.main)
     assert "preflight(args.repo_id)" in source
     assert "if not args.yes:" in source
+
+
+def test_card_flags_regenerated_diagnostics(tmp_path):
+    """A confusion matrix scored on a different dataset must say so."""
+    run = next(iter(model_card.REGENERATED_PLOTS))
+    make_run(tmp_path, run, imgsz=640)
+    checkpoint = discover(tmp_path)[run]
+
+    card = model_card.build_variant_card(checkpoint, "ns/coll", "02-yolo11n-640")
+
+    assert "Diagnostics regenerated" in card
+    assert "held-out split" in card
+
+
+def test_card_stays_quiet_for_runs_with_original_plots(tmp_path):
+    make_run(tmp_path, "some_normal_run", imgsz=1024)
+    checkpoint = discover(tmp_path)["some_normal_run"]
+    assert "Diagnostics regenerated" not in model_card.build_variant_card(
+        checkpoint, "ns/coll", "x")
+
+
+def test_regenerated_plots_names_a_real_published_run():
+    published = {run for run, _ in push_to_hub.PUBLISH_ORDER}
+    assert model_card.REGENERATED_PLOTS <= published

@@ -47,6 +47,15 @@ METRIC_COLUMNS = ("precision", "recall", "mAP50", "mAP50-95")
 #: Run recommended to anyone who does not want to read the comparison table.
 RECOMMENDED_RUN = "yolo11s_doc_layout_imgsz_1024"
 
+#: Runs whose diagnostic plots were produced after the fact rather than by the
+#: training run itself. Training ended before Ultralytics' final validation
+#: pass, so no confusion matrix or curves were written. They were regenerated
+#: from the saved checkpoint against the held-out split, which is a different
+#: dataset from the one the run trained on. The card says so, because a reader
+#: would otherwise reasonably assume a confusion matrix reflects the run's own
+#: validation data.
+REGENERATED_PLOTS: frozenset[str] = frozenset({"yolo11_doc_layout_v22"})
+
 
 def load_run_args(checkpoint: Checkpoint) -> dict[str, object]:
     """Read a run's ``args.yaml``.
@@ -509,6 +518,18 @@ def build_variant_card(
             "experiment and should not be read as one.\n"
         )
 
+    regenerated_note = ""
+    if checkpoint.name in REGENERATED_PLOTS:
+        regenerated_note = (
+            "\n> **Diagnostics regenerated.** This training run ended before "
+            "Ultralytics' final validation pass, so it wrote no confusion "
+            "matrix or curves. Those were regenerated afterwards from the saved "
+            "checkpoint, scored against the `round_final` held-out split rather "
+            "than the dataset this run trained on. `results.png` is a faithful "
+            "reconstruction from this run's own `results.csv`. The weights and "
+            "metrics are unaffected.\n"
+        )
+
     duplicate_note = ""
     if duplicate_of:
         duplicate_note = (
@@ -526,7 +547,7 @@ that apply to all of them.
 
 Internal run name: `{checkpoint.name}`. Trained at `imgsz={checkpoint.imgsz}`
 from `{parent_label}`.
-{duplicate_note}{caveat}
+{regenerated_note}{duplicate_note}{caveat}
 ## Results
 
 {header}
