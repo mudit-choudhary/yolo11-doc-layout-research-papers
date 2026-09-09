@@ -89,7 +89,7 @@ python -m doclayout_ft.training.download_base_models --variants n s
 # 5. Fine-tune
 python -m doclayout_ft.training.finetune --only yolo11s_doc_layout
 
-# 6. Check which runs actually finished
+# 6. Check which runs actually finished (exits 0 unless something is fixable)
 python -m doclayout_ft.audit
 
 # 7. Score every run and compare

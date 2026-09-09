@@ -23,11 +23,17 @@ This makes that visible. Each run directory is classified as:
 For dead runs it also guesses the cause from ``args.yaml``, since the two
 settings that actually killed runs in this project are recoverable from it.
 
+Exit code is 0 unless an *actionable* problem is found, meaning an incomplete
+run whose plots can be regenerated. Dead runs are reported but do not fail the
+check: they record a training attempt that ran out of memory, so failing on them
+would fail forever regardless of what anyone does. ``--strict`` includes them.
+
 Usage::
 
     python -m doclayout_ft.audit
     python -m doclayout_ft.audit --models-dir models
     python -m doclayout_ft.audit --verbose
+    python -m doclayout_ft.audit --strict
 """
 
 from __future__ import annotations
@@ -213,6 +219,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Directories to audit (default: FinetunedModels/ and models/)")
     parser.add_argument("--verbose", action="store_true",
                         help="List every run, not just the ones with problems")
+    parser.add_argument("--strict", action="store_true",
+                        help="Exit non-zero for dead runs too. Off by default, "
+                             "because a run that ran out of memory once is a "
+                             "historical fact and would fail the check forever.")
     return parser
 
 
@@ -226,7 +236,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    problems = 0
+    # Two different kinds of finding, and conflating them makes the command
+    # useless as a check. An incomplete run is actionable: its plots can be
+    # regenerated. A dead run is a historical fact about a training attempt
+    # that ran out of memory months ago; nothing can be done about it short of
+    # retraining on a bigger card, so failing on it forever is just noise.
+    incomplete = 0
+    dead = 0
     for root, runs in results.items():
         counts = {s: sum(1 for r in runs if r.status == s)
                   for s in ("complete", "incomplete", "dead", "base")}
@@ -243,11 +259,11 @@ def main(argv: list[str] | None = None) -> int:
                 continue
 
             if run.status == "dead":
-                problems += 1
-                print(f"    DEAD       {run.name}")
+                dead += 1
+                print(f"    dead       {run.name}")
                 print(f"               no weights written. {run.diagnosis}")
             elif run.status == "incomplete":
-                problems += 1
+                incomplete += 1
                 print(f"    INCOMPLETE {run.name}"
                       + (f"  ({run.epochs} epochs)" if run.epochs else ""))
                 print(f"               missing: {', '.join(run.missing)}")
@@ -255,15 +271,28 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    ok         {run.name}"
                       + (f"  ({run.epochs} epochs)" if run.epochs else ""))
 
-    if problems:
-        print(f"\n{problems} run(s) need attention.")
-        print("A dead run is published by nothing and appears in no table; it has "
-              "no weights to publish.\nAn incomplete run publishes fewer files "
-              "than its siblings. Regenerate its plots by\nvalidating the "
-              "checkpoint with plots enabled, or leave it and let its card say so.")
-        return 1
+    print()
+    if incomplete:
+        print(f"{incomplete} run(s) need attention.")
+        print("  An incomplete run has usable weights but publishes fewer files than")
+        print("  its siblings. Regenerate its plots by validating the checkpoint with")
+        print("  plots enabled, then note on its card that they were made after the")
+        print("  fact. See docs/RUN_INVENTORY.md.")
 
-    print("\nEvery run is complete.")
+    if dead:
+        if incomplete:
+            print()
+        print(f"{dead} dead run(s), for information.")
+        print("  These wrote no weights, so they publish nothing and appear in no")
+        print("  table. Nothing to fix: they are a record of training attempts that")
+        print("  ran out of memory. Retraining them needs a larger card, or a lower")
+        print("  --multi-scale and --batch. Pass --strict to fail on these too.")
+
+    if not incomplete and not dead:
+        print("Every run is complete.")
+
+    if incomplete or (dead and args.strict):
+        return 1
     return 0
 
 

@@ -6,9 +6,15 @@ it is real. Regenerate at any time:
 ```bash
 python -m doclayout_ft.audit            # problems only
 python -m doclayout_ft.audit --verbose  # every run
+python -m doclayout_ft.audit --strict   # fail on dead runs too
 ```
 
-Exit code is 0 when everything is healthy, 1 otherwise.
+Exit code is 0 unless an **actionable** problem is found, meaning an incomplete
+run whose plots can be regenerated. The five dead runs below are reported but do
+not fail the check: they record training attempts that ran out of memory, so
+failing on them would fail forever no matter what anyone does. `--strict`
+includes them, which is what you want if you ever clear them out and expect the
+tree to stay clean.
 
 ## Why this document exists
 

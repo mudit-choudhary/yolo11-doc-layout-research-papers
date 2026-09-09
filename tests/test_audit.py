@@ -125,12 +125,63 @@ def test_audit_raises_on_a_missing_root(tmp_path):
         audit.audit([tmp_path / "absent"])
 
 
-def test_exit_code_is_zero_only_when_everything_is_healthy(tmp_path):
+def test_incomplete_runs_fail_the_check(tmp_path):
+    """Incomplete is actionable: the plots can be regenerated."""
+    run = make_complete(tmp_path, "partial")
+    (run / "confusion_matrix.png").unlink()
+    assert audit.main(["--models-dir", str(tmp_path)]) == 1
+
+
+def test_dead_runs_do_not_fail_the_check_by_default(tmp_path):
+    """A run that OOM'd once is history; failing on it forever is noise."""
     make_complete(tmp_path, "good")
+    make_dead(tmp_path, "died", imgsz=1024, batch=3, multi_scale=0.5)
     assert audit.main(["--models-dir", str(tmp_path)]) == 0
 
-    make_dead(tmp_path, "bad", imgsz=1024, batch=3, multi_scale=0.5)
-    assert audit.main(["--models-dir", str(tmp_path)]) == 1
+
+def test_strict_fails_on_dead_runs(tmp_path):
+    make_dead(tmp_path, "died", imgsz=1024, batch=3, multi_scale=0.5)
+    assert audit.main(["--models-dir", str(tmp_path), "--strict"]) == 1
+
+
+def test_a_healthy_tree_passes(tmp_path):
+    make_complete(tmp_path, "good")
+    assert audit.main(["--models-dir", str(tmp_path)]) == 0
+    assert audit.main(["--models-dir", str(tmp_path), "--strict"]) == 0
+
+
+def test_advice_matches_what_was_actually_found(tmp_path, capsys):
+    """Do not explain incomplete runs when there are none."""
+    make_complete(tmp_path, "good")
+    make_dead(tmp_path, "died", imgsz=1024, batch=3, multi_scale=0.5)
+
+    audit.main(["--models-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert "dead run(s), for information" in out
+    assert "need attention" not in out, "no incomplete runs, so no such advice"
+    assert "Regenerate its plots" not in out
+
+
+def test_incomplete_advice_appears_only_for_incomplete_runs(tmp_path, capsys):
+    run = make_complete(tmp_path, "partial")
+    (run / "results.png").unlink()
+
+    audit.main(["--models-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert "need attention" in out
+    assert "Regenerate its plots" in out
+    assert "dead run(s)" not in out
+
+
+def test_healthy_tree_says_so_and_offers_no_advice(tmp_path, capsys):
+    make_complete(tmp_path, "good")
+    audit.main(["--models-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "Every run is complete." in out
+    assert "need attention" not in out
+    assert "dead run(s)" not in out
 
 
 def test_base_checkpoint_dirs_do_not_count_as_problems(tmp_path):
