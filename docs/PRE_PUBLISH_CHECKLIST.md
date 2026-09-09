@@ -61,20 +61,20 @@ python -m doclayout_ft.hub.push_to_hub --models-dir FinetunedModels models --lim
 
 ---
 
-## Needs you — decisions
+## Decided
 
-- [ ] **Keep AGPL-3.0?** Currently yes. The reasoning and the caveats are in
-      [LICENSING.md](LICENSING.md). Nothing to do if you keep it.
-- [ ] **Publish the 5 failed `augexp` runs?** Default excludes them. Including
-      them documents a negative result; their cards say plainly not to deploy
-      them. Controlled by whether you pass `--models-dir FinetunedModels models`.
-- [ ] **Repository name.** `darkdwine/yolo11-doc-layout-research-papers`. Change
-      `DEFAULT_REPO_ID` in `doclayout_ft/hub/push_to_hub.py` if you want another.
-- [ ] **Public or private first?** Publishing private and flipping to public
-      after inspection is the low-risk order. **Decide this before the first
-      publish:** `--private` applies only when the repository is created, so
-      passing it later does nothing. You do not create the repository by hand;
-      the first publish makes it.
+Settled on 2026-09-09. Recorded so the reasoning is not re-litigated later.
+
+- [x] **Licence: AGPL-3.0.** Kept. See [LICENSING.md](LICENSING.md) for why it
+      propagates from Ultralytics and what the network clause means.
+- [x] **Publish all 17, including the 5 failed `augexp` runs.** A documented
+      negative result is more useful than an undocumented one. Their cards and
+      the root table both say plainly not to deploy them. **This is now the
+      default**, so no flag is needed and none can be forgotten partway through
+      the backlog.
+- [x] **Repository: `darkdwine/yolo11-doc-layout-research-papers`.**
+- [x] **Private first**, made public later from the browser. `--private` must
+      be on the **first** publish, which is the one that creates the repository.
 
 ---
 
@@ -91,7 +91,7 @@ The copyright line goes elsewhere, and the repository has one now in
 
 ## The commands, in order
 
-Copy-paste, top to bottom. Run from the repository root with the venv active.
+Copy-paste, top to bottom.
 
 ```bash
 source /home/mudit/Desktop/fenv/bin/activate
@@ -104,103 +104,128 @@ cd /media/mudit/DarkDwine1/ResearchPapersYOLO_FT
 python -m pytest tests -q
 ```
 
-Expect all tests to pass. This includes the guards that keep page imagery off
-the Hub, so it is worth running rather than skipping.
+### 2. Authenticate
 
-### 2. Log in to Hugging Face
+First create a token at <https://huggingface.co/settings/tokens>:
+
+- **New token** → token type **Write** (a Read token logs in fine and then
+  fails when the repository is created)
+- Name it anything, `doclayout-publish` for instance
+- Copy it; the Hub shows it once
+
+Then:
 
 ```bash
 hf auth login
+```
+
+It prompts for the token. Paste it and press Enter. The paste is invisible,
+which is normal. Answer **n** to "Add token as git credential?" unless you also
+plan to `git push` to the Hub.
+
+Non-interactive alternative, if you prefer not to paste at a prompt:
+
+```bash
+hf auth login --token "$(cat ~/path/to/token.txt)"
+```
+
+Do not put the token in a shell command you type directly, or it lands in
+`~/.bash_history`. Never commit it.
+
+Confirm:
+
+```bash
 hf auth whoami
 ```
 
-Paste a token with **write** access, created at
-<https://huggingface.co/settings/tokens>. A read-only token authenticates fine
-and then fails when the repository is created. No token goes in this
-repository.
+It should print `darkdwine`. If it prints something else, that is your real
+username, and `DEFAULT_REPO_ID` in `doclayout_ft/hub/push_to_hub.py` needs to
+match it.
 
-The username `hf auth whoami` prints must match the namespace in
-`DEFAULT_REPO_ID`, currently `darkdwine`. The dry run in step 5 checks this for
-you and says so.
-
-You do **not** need to create the repository in the browser. The first publish
-creates it.
+The token is stored at `~/.cache/huggingface/token`. `hf auth logout` removes
+it.
 
 ### 3. Refresh the metrics the cards quote
 
-Skip only if you have not retrained anything since the last evaluation.
+Skip only if nothing has been retrained since the last evaluation.
 
 ```bash
-python -m doclayout_ft.evaluation.evaluate \
-    --models-dir FinetunedModels models --split val
+python -m doclayout_ft.evaluation.evaluate --split val
 ```
 
-Takes a few minutes on the GTX 1650. Writes `reports/evaluation_val.csv`.
+Scores all 22 models by default, which is what the 17 published variants need.
+Takes a few minutes on the GTX 1650.
 
-### 4. Read the queue
-
-```bash
-python -m doclayout_ft.hub.push_to_hub --list
-```
-
-Add `--models-dir FinetunedModels models` here and in every command below if
-you decided to include the failed `augexp` runs.
-
-### 5. Dry run, and actually read the output
+### 4. Dry run, and read the preflight lines
 
 ```bash
 python -m doclayout_ft.hub.push_to_hub --limit 2
 ```
 
-Read two things. First the `preflight:` lines, which confirm your login has
-write scope and that the namespace is yours. Then the file list under each
-variant: you want nothing ending `.jpg` except `labels.jpg`.
+Expect:
 
-Nothing is uploaded without `--yes`.
-
-### 6. Publish the first two
-
-```bash
-python -m doclayout_ft.hub.push_to_hub --limit 2 --yes
+```
+  preflight: logged in as 'darkdwine', token role 'write'
+  preflight: 'darkdwine/yolo11-doc-layout-research-papers' will be created automatically on publish.
 ```
 
-The repository is created here, automatically. Add `--private` if you want to
-inspect before anyone else can see it, and add it **on this first run**: it is
-ignored once the repository exists. Making it public later is one setting in
-the Hub UI.
+If it warns about a read-only token or a namespace mismatch, fix that before
+going further. Nothing uploads without `--yes`.
 
-### 7. Check the result
+### 5. First publish — this creates the repository
+
+```bash
+python -m doclayout_ft.hub.push_to_hub --limit 2 --private --yes
+```
+
+`--private` matters **only on this run**. It is ignored once the repository
+exists.
+
+### 6. Check it
 
 Open <https://huggingface.co/darkdwine/yolo11-doc-layout-research-papers>.
-Confirm the root card renders, the comparison table looks right, and one
-variant subfolder contains `best.pt` and its own `README.md`.
+Confirm the root card renders, the table looks right, and `01-yolo11n-640/`
+holds `best.pt` plus its own `README.md`.
 
-### 8. Next week, and the week after
+### 7. Every following week
 
 ```bash
 python -m doclayout_ft.hub.push_to_hub --limit 2 --yes
 ```
 
-Same command each time. The ledger tracks what has gone, so it continues rather
-than repeats. Seven or nine passes clears the backlog.
+No `--private` needed; the repository keeps its visibility. The ledger tracks
+what has gone, so this continues rather than repeats. Nine passes clears all 17.
 
-### If a card needs fixing after publishing
+Watch the last line for progress:
+
+```
+Published 2 variant(s) into darkdwine/... 13 still pending; run this again to continue.
+```
+
+### 8. When you are ready to go public
+
+In the browser: repository → **Settings** → **Change visibility** → Public.
+Nothing to run locally.
+
+---
+
+## If something needs fixing after publishing
 
 ```bash
 # rebuild only the root comparison table
 python -m doclayout_ft.hub.push_to_hub --refresh-index --yes
 
-# re-upload one variant
+# re-upload one variant, card and all
 python -m doclayout_ft.hub.push_to_hub \
     --only yolo11s_doc_layout_imgsz_1024 --include-published --yes
 ```
 
-### To jump the queue and publish the best model first
+## To publish the best model first instead of oldest-first
 
 ```bash
 python -m doclayout_ft.hub.push_to_hub \
-    --only yolo11s_doc_layout_imgsz_1024 --yes
+    --only yolo11s_doc_layout_imgsz_1024 --private --yes
 ```
 
-It lands in `12-yolo11s-1024/` regardless of publish order, so doing this does
-not disturb the numbering.
+It lands in `12-yolo11s-1024/` regardless, so the numbering is unaffected and
+the remaining backlog continues from the oldest.

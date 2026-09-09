@@ -46,6 +46,7 @@ from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
 from doclayout_ft.config import (
     DEFAULT_ROUND,
     FINETUNED_DIR,
+    MODELS_DIR,
     REPORTS_DIR,
     data_yaml,
     resolve_device,
@@ -188,10 +189,12 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--models-dir", type=Path, nargs="+", default=[FINETUNED_DIR],
+    parser.add_argument("--models-dir", type=Path, nargs="+",
+                        default=[FINETUNED_DIR, MODELS_DIR],
                         help="Directories of models to evaluate, most authoritative "
-                             "first (default: FinetunedModels/). Pass both "
-                             "FinetunedModels and models to include the attempt_02 runs.")
+                             "first (default: FinetunedModels/ then models/). This "
+                             "matches what the publisher scores by default, so every "
+                             "published variant has a held-out number.")
     parser.add_argument("--round", default=DEFAULT_ROUND,
                         help=f"Dataset round to evaluate against (default: {DEFAULT_ROUND})")
     parser.add_argument("--split", choices=sorted(ULTRALYTICS_SPLIT), default="val",

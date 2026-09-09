@@ -53,7 +53,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
-from doclayout_ft.config import FINETUNED_DIR, ROOT
+from doclayout_ft.config import FINETUNED_DIR, MODELS_DIR, ROOT
 from doclayout_ft.hub.model_card import (
     build_index_card,
     build_variant_card,
@@ -490,11 +490,13 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--models-dir", type=Path, nargs="+", default=[FINETUNED_DIR],
+    parser.add_argument("--models-dir", type=Path, nargs="+",
+                        default=[FINETUNED_DIR, MODELS_DIR],
                         help="Directories of runs to publish, most authoritative "
-                             "first (default: FinetunedModels/). Pass both "
-                             "FinetunedModels and models to include the "
-                             "attempt_02 runs.")
+                             "first (default: FinetunedModels/ then models/). "
+                             "Seven run names exist in both; the first listed "
+                             "wins. Pass just FinetunedModels to leave out the "
+                             "five failed augexp runs.")
     parser.add_argument("--repo-id", default=DEFAULT_REPO_ID,
                         help=f"The single collection repository every variant is "
                              f"published into (default: {DEFAULT_REPO_ID})")

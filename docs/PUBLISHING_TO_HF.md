@@ -105,21 +105,20 @@ Run the same command again next week and it picks up the next two.
 
 ### Which models are in the queue
 
-By default only `FinetunedModels/`, which holds 14 curated runs. The working
-`models/` directory holds 5 more, all of them the `attempt_02` runs that
-carry the failed augmentation experiment. To publish those too:
+All 17 by default, drawn from `FinetunedModels/` and `models/` together. Seven
+run names exist in both; the first directory listed wins, which is why
+`FinetunedModels` comes first.
+
+Five of those are the `augexp` runs carrying the failed augmentation
+experiment. They are published deliberately: a documented negative result is
+more useful than an undocumented one, and both their own cards and the root
+table say plainly not to deploy them.
+
+To leave them out instead:
 
 ```bash
-python -m doclayout_ft.hub.push_to_hub --models-dir FinetunedModels models --list
+python -m doclayout_ft.hub.push_to_hub --models-dir FinetunedModels --list
 ```
-
-Seven run names exist in both directories. The first directory listed wins, so
-keep `FinetunedModels` first.
-
-Publishing the failures is a defensible choice, since a documented negative
-result is more useful than an undocumented one, and their cards say plainly
-that they should not be deployed. Leaving them out is equally defensible. The
-default leaves them out.
 
 ### Useful variations
 
