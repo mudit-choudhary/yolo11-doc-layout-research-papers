@@ -52,7 +52,7 @@ def test_comparison_rows_exclude_duplicates(reports):
     assert alias not in names, "a duplicate must not appear twice in the chart"
 
 
-def test_lineage_classes_are_assigned_from_the_notes(reports):
+def test_lineage_classes_come_from_the_data_not_the_note_text(reports):
     write_eval(reports, [
         ("yolo11s_doc_layout_imgsz_1024", 0.77),        # recommended, single
         ("yolo11_doc_layout_v2224_imgsz_1024", 0.78),   # 3 fine-tunes deep

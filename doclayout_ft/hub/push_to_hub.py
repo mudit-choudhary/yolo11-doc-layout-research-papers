@@ -137,54 +137,55 @@ PUBLISH_ORDER: tuple[tuple[str, str], ...] = (
     ("yolo11s_doc_layout_attempt_02",                        "17-yolo11s-1024-augexp"),
 )
 
-#: One-line note shown against each variant in the root comparison table.
+#: Successive fine-tuning passes that produced each checkpoint, counted by
+#: walking each run's args.yaml `model:` key back to a base checkpoint and
+#: resolving every parent by run name across both model directories. Several
+#: recorded parent paths point at locations that no longer exist, so resolving
+#: by path undercounts.
 #:
-#: The table gets read on its own, so each note has to make sense without the
-#: prose above it. "N fine-tunes deep" is the fact worth stating: a checkpoint
-#: produced by one pass from a published base can be reproduced with a single
-#: command, while one produced by four successive passes over datasets that no
-#: longer exist cannot be reproduced at all.
+#: This is a column of its own rather than prose in the Notes, because it is a
+#: number and a narrow numeric column costs almost no table width. 1 means the
+#: checkpoint can be rebuilt from a published base with a single command.
+RUN_PASSES: dict[str, int] = {
+    "yolo11_doc_layout_v2": 1,
+    "yolo11_doc_layout_v22": 1,
+    "yolo11_doc_layout_v2224": 2,
+    "yolo11_doc_layout_v222_round03": 2,
+    "yolo11_doc_layout_v2224_round03": 3,
+    "yolo11_doc_layout_v2_imgsz_1024": 2,
+    "yolo11_doc_layout_v22_imgsz_1024": 2,
+    "yolo11_doc_layout_v2224_imgsz_1024": 3,
+    "yolo11_doc_layout_v222_round03_imgsz_1024": 3,
+    "yolo11_doc_layout_v2224_round03_imgsz_1024": 4,
+    "yolo11n_doc_layout_imgsz_1024": 1,
+    "yolo11s_doc_layout_imgsz_1024": 1,
+    "yolo11_doc_layout_v222_imgsz_1024_attempt_02": 3,
+    "yolo11_doc_layout_v222_round03_attempt_02": 3,
+    "yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02": 4,
+    "yolo11s_doc_layout_imgsz_1024_attempt_02": 2,
+    "yolo11s_doc_layout_attempt_02": 1,
+}
+
+#: Short note shown against each variant in the root comparison table.
 #:
-#: Depth was read from each run's args.yaml by walking the `model:` key back to
-#: a base checkpoint, resolving each parent by run name across both model
-#: directories rather than by its recorded path, since several recorded paths
-#: point at locations that no longer exist.
-#:
-#: Depth says nothing about accuracy. It was checked: the deeper lineages pass
-#: through a dataset round that overlaps today's held-out papers, and scoring
-#: seen against unseen papers separately showed clean-lineage models with the
-#: same gap. The scores are comparable. See docs/EVALUATION.md.
+#: Kept to a few words. These were once full sentences, which pushed the table
+#: past the width of the page and left the column clipped behind a horizontal
+#: scrollbar, so the one thing a reader needs in order to choose was the one
+#: thing they could not see. Anything longer belongs in the prose above the
+#: table or on the variant's own card. An empty note is fine: most rows need no
+#: comment beyond their score and pass count.
 RUN_STATUS: dict[str, str] = {
-    # Single pass from a published base: reproducible with one command.
-    "yolo11s_doc_layout_imgsz_1024":
-        "**Recommended.** 1 fine-tune from base, reproducible",
-    "yolo11n_doc_layout_imgsz_1024":
-        "Fastest. 1 fine-tune from base, reproducible",
-    "yolo11_doc_layout_v2": "1 fine-tune from base. Early run, superseded",
-    "yolo11_doc_layout_v22": "1 fine-tune from base. Early run, superseded",
-
-    # Multiple passes, earliest over datasets that no longer exist.
-    "yolo11_doc_layout_v2224": "2 fine-tunes deep. Early run, superseded",
-    "yolo11_doc_layout_v2_imgsz_1024": "2 fine-tunes deep, hard to reproduce",
-    "yolo11_doc_layout_v22_imgsz_1024": "2 fine-tunes deep, hard to reproduce",
-    "yolo11_doc_layout_v222_round03": "2 fine-tunes deep, hard to reproduce",
-    "yolo11_doc_layout_v2224_round03": "3 fine-tunes deep, hard to reproduce",
-    "yolo11_doc_layout_v2224_imgsz_1024":
-        "3 fine-tunes deep, hard to reproduce. Tops the table by ~0.002, within noise",
-    "yolo11_doc_layout_v222_round03_imgsz_1024": "3 fine-tunes deep, hard to reproduce",
-    "yolo11_doc_layout_v2224_round03_imgsz_1024": "4 fine-tunes deep, hard to reproduce",
-
-    # The failed augmentation experiment.
-    "yolo11_doc_layout_v222_imgsz_1024_attempt_02":
-        "Failed experiment, do not deploy. 3 fine-tunes deep",
-    "yolo11_doc_layout_v222_round03_attempt_02":
-        "Failed experiment, do not deploy. 3 fine-tunes deep",
-    "yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02":
-        "Failed experiment, do not deploy. 4 fine-tunes deep",
-    "yolo11s_doc_layout_imgsz_1024_attempt_02":
-        "Failed experiment, do not deploy. 2 fine-tunes deep",
-    "yolo11s_doc_layout_attempt_02":
-        "Failed experiment, do not deploy. 1 fine-tune from base",
+    "yolo11s_doc_layout_imgsz_1024": "**Recommended**",
+    "yolo11n_doc_layout_imgsz_1024": "Fastest",
+    "yolo11_doc_layout_v2224_imgsz_1024": "Leads by 0.002, within noise",
+    "yolo11_doc_layout_v2": "Earliest run",
+    "yolo11_doc_layout_v22": "Early run",
+    "yolo11_doc_layout_v2224": "Early run",
+    "yolo11_doc_layout_v222_imgsz_1024_attempt_02": "Failed experiment",
+    "yolo11_doc_layout_v222_round03_attempt_02": "Failed experiment",
+    "yolo11_doc_layout_v222_round03_imgsz_1024_attempt_02": "Failed experiment",
+    "yolo11s_doc_layout_imgsz_1024_attempt_02": "Failed experiment",
+    "yolo11s_doc_layout_attempt_02": "Failed experiment",
 }
 
 #: Runs whose weights are numerically identical to another run's, verified by
@@ -220,8 +221,13 @@ def subfolder_for(run_name: str) -> str:
 
 
 def status_for(run_name: str) -> str:
-    """Return the one-line status shown against a variant, or an empty string."""
+    """Return the short note shown against a variant, or an empty string."""
     return RUN_STATUS.get(run_name, "")
+
+
+def passes_for(run_name: str) -> int | None:
+    """Return how many successive fine-tuning passes produced a checkpoint."""
+    return RUN_PASSES.get(run_name)
 
 
 def publish_rank(run_name: str) -> int:
@@ -349,10 +355,16 @@ def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
             "rank": publish_rank(name),
             "subfolder": record.get("subfolder", subfolder_for(name)),
             "run_name": record.get("run_name", name),
-            # Editorial text, not a fact about the publish event: always take
-            # the current wording so an edit reaches rows published weeks ago.
-            # The stored value is a fallback for a run no longer in the table.
-            "status": status_for(name) or record.get("status", ""),
+            # Editorial text, not a fact about the publish event, so the
+            # current wording wins for any run still in the table -- including
+            # when the current wording is deliberately empty, which most rows
+            # now are. Falling back on truthiness would resurrect a note that
+            # was removed on purpose. The stored value serves only a run that
+            # has dropped out of the table entirely.
+            "status": (status_for(name) if name in _SUBFOLDER_BY_RUN
+                       else record.get("status", "")),
+            "passes": (passes_for(name) if name in _SUBFOLDER_BY_RUN
+                       else record.get("passes")),
             "imgsz": record.get("imgsz", "?"),
             "metrics": record.get("metrics", {}),
             "held_out": record.get("metrics_from_held_out_eval", True),
@@ -403,6 +415,7 @@ def publish_one(
         "run_name": checkpoint.name,
         "subfolder": subfolder,
         "status": status_for(checkpoint.name),
+        "passes": passes_for(checkpoint.name),
         "imgsz": checkpoint.imgsz,
         "metrics": metrics,
         "metrics_from_held_out_eval": from_held_out,
@@ -665,6 +678,7 @@ def main(argv: list[str] | None = None) -> int:
                 "subfolder": subfolder_for(checkpoint.name),
                 "run_name": checkpoint.name,
                 "status": status_for(checkpoint.name),
+        "passes": passes_for(checkpoint.name),
                 "imgsz": checkpoint.imgsz,
                 "metrics": metrics,
                 "metrics_from_held_out_eval": from_held_out,

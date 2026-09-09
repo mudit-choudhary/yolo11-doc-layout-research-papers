@@ -214,25 +214,24 @@ def build_index_card(
 
     if ordered:
         rows = "\n".join(
-            "| `{subfolder}`{mark} | {imgsz} | {mAP5095} | {mAP50} | {precision} | "
-            "{recall} | {status} |".format(
+            "| `{subfolder}`{mark} | {imgsz} | {passes} | {mAP5095} | {status} |".format(
                 subfolder=entry["subfolder"],
                 mark="" if entry.get("held_out", True) else " †",
                 imgsz=entry["imgsz"],
-                precision=entry["metrics"].get("precision", "n/a"),
-                recall=entry["metrics"].get("recall", "n/a"),
-                mAP50=entry["metrics"].get("mAP50", "n/a"),
+                passes=entry.get("passes") or "?",
                 mAP5095=entry["metrics"].get("mAP50-95", "n/a"),
                 status=entry.get("status", "") or "",
             )
             for entry in ordered
         )
-        # mAP50-95 sits second, right after the name: it is the column people
-        # are actually comparing, and burying it at the far right makes a wide
-        # table harder to read than it needs to be.
+        # Five columns, not seven. Precision, recall and mAP50 were dropped:
+        # they pushed the table wider than the page, which put the Notes column
+        # behind a horizontal scrollbar, and Notes is the column a reader needs
+        # in order to choose. All four measures remain on each variant's own
+        # card and in results.csv.
         table = (
-            "| Variant | imgsz | mAP50-95 | mAP50 | Precision | Recall | Notes |\n"
-            "|---|---|---|---|---|---|---|\n" + rows
+            "| Variant | imgsz | Passes | mAP50-95 | Notes |\n"
+            "|---|---|---|---|---|\n" + rows
         )
         if any_training_time:
             table += (
@@ -294,18 +293,21 @@ datasets that no longer exist in their original form, which makes it far harder
 to reproduce or reason about. The recommendation is for the simpler lineage, not
 because the numbers separate them.
 
-### Reading the Notes column
+### Reading the table
 
-**"1 fine-tune from base"** means the checkpoint was produced by fine-tuning a
-published base model once. You can reproduce it with a single command.
+**Passes** is how many successive fine-tuning runs produced the checkpoint,
+each starting from the previous one's output.
 
-**"N fine-tunes deep"** means N successive passes, each starting from the
-previous one's output. The earliest passes used datasets that no longer exist in
-their original form, so those checkpoints cannot be reproduced from scratch. It
-also makes them harder to reason about: a model four passes deep has been shaped
-by four different dataset versions.
+**1** means it was fine-tuned once from a published base model, so you can
+reproduce it with a single command. **2 or more** means the earliest passes used
+datasets that no longer exist in their original form, so it cannot be rebuilt
+from scratch, and it has been shaped by several dataset versions rather than
+one.
 
-Depth says nothing about accuracy. The early datasets overlap today's held-out
+Precision, recall and mAP50 are on each variant's own card, alongside its full
+training configuration.
+
+Pass count says nothing about accuracy. The early datasets overlap today's held-out
 papers by up to 19%, so the scores were checked for inflation and **none was
 found**: single-pass models show the same gap between overlapping and
 non-overlapping papers, meaning those pages are simply easier for everything.

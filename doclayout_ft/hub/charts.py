@@ -112,7 +112,7 @@ def load_comparison_rows(split: str = "val") -> list[dict]:
         FileNotFoundError: If the evaluation table has not been generated.
     """
     from doclayout_ft.hub.push_to_hub import (
-        DUPLICATE_OF, PUBLISH_ORDER, status_for, subfolder_for,
+        DUPLICATE_OF, PUBLISH_ORDER, passes_for, status_for, subfolder_for,
     )
 
     table = REPORTS_DIR / f"evaluation_{split}.csv"
@@ -132,10 +132,12 @@ def load_comparison_rows(split: str = "val") -> list[dict]:
     for run, _ in PUBLISH_ORDER:
         if run in DUPLICATE_OF or run not in scores:
             continue
-        note = status_for(run)
-        if "Failed experiment" in note:
+        # Classify from the data, not from the note text. An earlier version
+        # parsed the Notes column, which broke silently the moment that wording
+        # was shortened.
+        if run.endswith("_attempt_02"):
             lineage = "failed"
-        elif "1 fine-tune from base" in note:
+        elif (passes_for(run) or 2) == 1:
             lineage = "single"
         else:
             lineage = "deep"
@@ -144,7 +146,8 @@ def load_comparison_rows(split: str = "val") -> list[dict]:
             "run": run,
             "score": scores[run],
             "lineage": lineage,
-            "recommended": "Recommended" in note,
+            "passes": passes_for(run),
+            "recommended": "Recommended" in status_for(run),
         })
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows

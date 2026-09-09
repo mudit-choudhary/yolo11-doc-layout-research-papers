@@ -211,6 +211,19 @@ names. The duplicates are skipped, and named on the card of the run they
 duplicate so the omission is visible. That leaves 17 distinct models from 19
 run directories.
 
+## Keeping the table narrow
+
+The root table is five columns: Variant, imgsz, Passes, mAP50-95, Notes. It was
+seven, with Precision, Recall and mAP50 as well, and full sentences in Notes.
+That pushed it past the width of the page, so Hugging Face put it behind a
+horizontal scrollbar and clipped the Notes column, hiding the one thing a reader
+needs in order to choose.
+
+Precision, recall and mAP50 live on each variant's own card and in its
+`results.csv`. The lineage depth that used to be prose is now the numeric
+**Passes** column, which costs almost no width. Notes are capped at 32
+characters, enforced by a test, and most rows are deliberately blank.
+
 ## Editing a note after publishing
 
 The Notes column text lives in `RUN_STATUS` in

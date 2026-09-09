@@ -83,12 +83,25 @@ def test_failed_runs_keep_a_marker_in_the_name():
             assert not folder.endswith("-augexp"), folder
 
 
-def test_every_non_obvious_run_has_a_status_line():
-    """The Notes column is where 'which should I use' gets answered."""
+def test_every_failed_run_is_labelled_as_one():
+    """A reader must not mistake a published failure for an option."""
     for run, _ in push_to_hub.PUBLISH_ORDER:
-        if run.endswith("_attempt_02") or "round03" in run:
-            assert push_to_hub.status_for(run), f"{run} needs a note"
+        if run.endswith("_attempt_02"):
+            assert "Failed experiment" in push_to_hub.status_for(run), run
     assert "Recommended" in push_to_hub.status_for("yolo11s_doc_layout_imgsz_1024")
+
+
+def test_every_run_has_a_pass_count():
+    """The Passes column replaced prose, so it has to be complete."""
+    for run, _ in push_to_hub.PUBLISH_ORDER:
+        count = push_to_hub.passes_for(run)
+        assert isinstance(count, int) and count >= 1, f"{run}: {count!r}"
+
+
+def test_single_pass_runs_are_the_reproducible_ones():
+    assert push_to_hub.passes_for("yolo11s_doc_layout_imgsz_1024") == 1
+    assert push_to_hub.passes_for("yolo11n_doc_layout_imgsz_1024") == 1
+    assert push_to_hub.passes_for("yolo11_doc_layout_v2224_round03_imgsz_1024") == 4
 
 
 def test_status_map_only_names_runs_that_are_published():
@@ -601,9 +614,20 @@ def test_a_run_dropped_from_the_table_keeps_its_stored_note():
     assert push_to_hub.index_entries(stale)[0]["status"] == "kept"
 
 
-def test_notes_are_self_explanatory_without_the_prose_above_them():
-    """The table is read on its own, so each note must stand alone."""
+def test_notes_stay_short_enough_not_to_widen_the_table():
+    """Sentences here pushed the table past the page and hid the column behind
+    a horizontal scrollbar, which defeated its purpose."""
     for run, _ in push_to_hub.PUBLISH_ORDER:
         note = push_to_hub.status_for(run)
-        assert note, f"{run} has no note"
-        assert "fine-tune" in note, f"{run}: note should state lineage depth: {note!r}"
+        assert len(note) <= 32, f"{run}: note too long for the column: {note!r}"
+
+
+def test_a_removed_note_is_not_resurrected_from_the_ledger():
+    """Most rows are deliberately blank; truthiness fallback would undo that."""
+    run = "yolo11_doc_layout_v222_round03_imgsz_1024"
+    assert push_to_hub.status_for(run) == "", "this row is intentionally blank"
+
+    stale = {run: {"subfolder": "09-yolo11n-1024", "imgsz": 1024,
+                   "metrics": {}, "status": "Chained lineage"}}
+
+    assert push_to_hub.index_entries(stale)[0]["status"] == ""
