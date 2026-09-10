@@ -90,13 +90,19 @@ def _titles(figure, title: str, subtitle: str) -> float:
     Returns:
         The ``rect`` top to pass to ``tight_layout``.
     """
+    # The subtitle's own text (9.8pt, one line) ends around 0.70in from the
+    # top once its line height is accounted for. The rect top used to be
+    # 0.98in, leaving roughly 0.28in of pure dead space between the subtitle
+    # and the first gridline or bar -- visible as a gap the same size in every
+    # chart, since they all go through this function. Tightened so the rect
+    # starts just past the subtitle, not most of an inch below it.
     height = figure.get_size_inches()[1]
     figure.suptitle(title, x=TITLE_X, y=1 - 0.26 / height, ha="left",
                     va="top", fontsize=TITLE_SIZE, color=TEXT_PRIMARY,
                     fontweight="bold")
-    figure.text(TITLE_X, 1 - 0.54 / height, subtitle, ha="left", va="top",
+    figure.text(TITLE_X, 1 - 0.52 / height, subtitle, ha="left", va="top",
                 fontsize=SUBTITLE_SIZE, color=TEXT_SECONDARY)
-    return 1 - 0.98 / height
+    return 1 - 0.74 / height
 
 
 def _caption(figure, text: str) -> None:
