@@ -54,11 +54,9 @@ env/
 .idea/
 .DS_Store
 
-# Local Claude Code permissions, machine-specific.
-.claude/settings.local.json
+# Local Claude Code settings and permissions, machine-specific.
+.claude/
 
 # Hugging Face publish ledger: records which runs have already been pushed.
 # Machine-local bookkeeping, not shared state.
 .hf_publish_ledger.json
-
-.claude/
