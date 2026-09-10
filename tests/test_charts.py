@@ -135,3 +135,102 @@ def test_the_card_references_both_charts():
     assert "](comparison.png)" in card
     assert "](per-class.png)" in card
     assert card.count("![") >= 2, "both images need alt text"
+
+
+# --------------------------------------------------------------------------
+# Latency and the charts that use it
+# --------------------------------------------------------------------------
+
+
+def write_latency(path: Path, rows: list[tuple[str, float]]) -> None:
+    with (path / "latency.csv").open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["model", "imgsz", "params_m", "gflops", "median_ms",
+                         "mean_ms", "p90_ms", "fps", "weights_mb"])
+        for name, ms in rows:
+            writer.writerow([name, 1024, 2.58, 16.6, ms, ms, ms + 2,
+                             round(1000 / ms, 2), 5.3])
+
+
+def test_latency_table_is_read_by_model_name(reports):
+    write_latency(reports, [("yolo11s_doc_layout_imgsz_1024", 37.1)])
+    rows = charts.load_latency()
+    assert rows["yolo11s_doc_layout_imgsz_1024"]["median_ms"] == 37.1
+
+
+def test_missing_latency_table_names_the_fix(reports):
+    with pytest.raises(FileNotFoundError, match="benchmark"):
+        charts.load_latency()
+
+
+def test_malformed_latency_row_is_skipped(reports):
+    (reports / "latency.csv").write_text("model,median_ms,fps,params_m\nx,,,\n")
+    assert charts.load_latency() == {}
+
+
+def test_speed_accuracy_chart_renders(reports, tmp_path):
+    write_eval(reports, [("yolo11s_doc_layout_imgsz_1024", 0.7694),
+                         ("yolo11n_doc_layout_imgsz_1024", 0.7661)])
+    write_latency(reports, [("yolo11s_doc_layout_imgsz_1024", 37.1),
+                            ("yolo11n_doc_layout_imgsz_1024", 18.6)])
+
+    out = charts.build_speed_accuracy_chart(tmp_path / "s.png")
+
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_speed_accuracy_needs_models_present_in_both_tables(reports, tmp_path):
+    """Scoring one set and timing another would plot nothing meaningful."""
+    write_eval(reports, [("yolo11s_doc_layout_imgsz_1024", 0.77)])
+    write_latency(reports, [("yolo11n_doc_layout_imgsz_1024", 18.6)])
+
+    with pytest.raises(FileNotFoundError, match="both"):
+        charts.build_speed_accuracy_chart(tmp_path / "s.png")
+
+
+def test_precision_recall_chart_renders(reports, tmp_path):
+    write_eval(reports, [("yolo11s_doc_layout_imgsz_1024", 0.7694),
+                         ("yolo11n_doc_layout_imgsz_1024", 0.7661)])
+    out = charts.build_precision_recall_chart(tmp_path / "p.png")
+    assert out.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_precision_recall_needs_the_evaluation_table(reports, tmp_path):
+    with pytest.raises(FileNotFoundError, match="evaluate"):
+        charts.build_precision_recall_chart(tmp_path / "p.png")
+
+
+def test_the_card_references_all_four_charts():
+    from doclayout_ft.hub.model_card import build_index_card
+    card = build_index_card("ns/coll", [
+        {"name": "a", "subfolder": "12-yolo11s-1024", "imgsz": 1024,
+         "metrics": {"mAP50-95": "0.7694"}, "latency_ms": 37.1},
+    ])
+    for image in ("comparison.png", "speed-accuracy.png",
+                  "precision-recall.png", "per-class.png"):
+        assert f"]({image})" in card, image
+    assert card.count("![") >= 4, "every image needs alt text"
+
+
+def test_every_published_chart_has_a_builder():
+    from doclayout_ft.hub import push_to_hub
+    assert len(push_to_hub.INDEX_CHARTS) == 4
+
+
+def test_latency_reaches_the_table(reports):
+    from doclayout_ft.hub.push_to_hub import index_entries
+    write_latency(reports, [("yolo11s_doc_layout_imgsz_1024", 37.1)])
+    entry = index_entries(
+        {"yolo11s_doc_layout_imgsz_1024": {"subfolder": "12-yolo11s-1024",
+                                           "imgsz": 1024, "metrics": {}}})[0]
+    assert entry["latency_ms"] == 37.1
+
+
+def test_the_table_survives_a_missing_benchmark(reports):
+    """Latency is optional: the column shows a dash until it is measured."""
+    from doclayout_ft.hub.model_card import build_index_card
+    card = build_index_card("ns/coll", [
+        {"name": "a", "subfolder": "12-yolo11s-1024", "imgsz": 1024,
+         "metrics": {"mAP50-95": "0.7694"}},
+    ])
+    assert "| - |" in card

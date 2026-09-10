@@ -95,10 +95,13 @@ python -m doclayout_ft.audit
 # 7. Score every run and compare
 python -m doclayout_ft.evaluation.evaluate --split val
 
-# 8. Break the best one down by class
+# 8. Time every run so the cards can show the speed/accuracy trade
+python -m doclayout_ft.evaluation.benchmark
+
+# 9. Break the best one down by class
 python -m doclayout_ft.evaluation.per_class
 
-# 9. Publish to one Hugging Face repo, two variants at a time
+# 10. Publish to one Hugging Face repo, two variants at a time
 python -m doclayout_ft.hub.push_to_hub --limit 2 --yes
 ```
 
@@ -136,8 +139,11 @@ in [docs/SPRINT_REPORT.md](docs/SPRINT_REPORT.md).
   of nineteen runs descend from a round that saw up to 19% of today's validation
   papers. Tested directly: clean-lineage models show the same gap on those
   papers, so they are simply easier pages, not memorised ones.
-- **`yolo11s` beat `yolo11n` slightly**, on the classes that matter most for
-  chunking, at roughly five times the training time.
+- **`yolo11s` beat `yolo11n` by 0.003, and costs twice the latency.** Measured
+  at batch 1 on the reference GPU: 37 ms per page against 19 ms, for a
+  difference in mAP50-95 that is inside noise. `yolo11s` still leads on `Table`
+  and `Footnote`, so it stays the accuracy pick, but `yolo11n` at 1024 is the
+  better default for anything processing pages in bulk.
 - **`yolo11m` could not be trained on this hardware.** It runs out of memory
   below batch size 2, and batch size 1 makes batch-norm statistics unreliable.
 - **`multi_scale` is a memory multiplier, not a tweak.** At 0.5 it trains on

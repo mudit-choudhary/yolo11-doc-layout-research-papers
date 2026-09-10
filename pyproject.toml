@@ -41,6 +41,7 @@ doclayout-perclass = "doclayout_ft.evaluation.per_class:main"
 doclayout-predict = "doclayout_ft.inference.predict:main"
 doclayout-push = "doclayout_ft.hub.push_to_hub:main"
 doclayout-audit = "doclayout_ft.audit:main"
+doclayout-benchmark = "doclayout_ft.evaluation.benchmark:main"
 
 [tool.setuptools.packages.find]
 include = ["doclayout_ft*"]

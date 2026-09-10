@@ -34,6 +34,7 @@ which is the documented relief.
 from __future__ import annotations
 
 import csv
+import statistics
 from pathlib import Path
 
 import matplotlib
@@ -62,11 +63,22 @@ MUTED = "#b3b1a9"
 #: distinction survives greyscale and colour-vision deficiency.
 FAILED_HATCH = "////"
 
+#: One typographic scale, used by every chart so they read as one set.
+TITLE_SIZE = 14.0
+SUBTITLE_SIZE = 9.8
+LABEL_SIZE = 9.5
+TICK_SIZE = 9.0
+VALUE_SIZE = 9.0
+
+#: Left inset for the title block, as a figure fraction.
+TITLE_X = 0.012
+
+
 def _titles(figure, title: str, subtitle: str) -> float:
     """Place the title block and return the top of the plotting rectangle.
 
     Positions are computed from a fixed offset in inches rather than as a
-    fraction of figure height. The two charts differ in height, and a fractional
+    fraction of figure height. The charts differ in height, and a fractional
     offset that clears the title on a tall figure lands on top of it on a short
     one.
 
@@ -79,23 +91,35 @@ def _titles(figure, title: str, subtitle: str) -> float:
         The ``rect`` top to pass to ``tight_layout``.
     """
     height = figure.get_size_inches()[1]
-    figure.suptitle(title, x=0.012, y=1 - 0.26 / height, ha="left",
-                    va="top", fontsize=13.5, color=TEXT_PRIMARY,
+    figure.suptitle(title, x=TITLE_X, y=1 - 0.26 / height, ha="left",
+                    va="top", fontsize=TITLE_SIZE, color=TEXT_PRIMARY,
                     fontweight="bold")
-    figure.text(0.012, 1 - 0.52 / height, subtitle, ha="left", va="top",
-                fontsize=9.5, color=TEXT_SECONDARY)
-    return 1 - 0.95 / height
+    figure.text(TITLE_X, 1 - 0.54 / height, subtitle, ha="left", va="top",
+                fontsize=SUBTITLE_SIZE, color=TEXT_SECONDARY)
+    return 1 - 0.98 / height
 
 
-def _style(axes) -> None:
-    """Apply the recessive grid and axis treatment shared by both charts."""
+def _caption(figure, text: str) -> None:
+    """Add a footnote under the plot, for provenance and caveats."""
+    figure.text(TITLE_X, 0.012, text, ha="left", va="bottom",
+                fontsize=8.4, color=TEXT_SECONDARY)
+
+
+def _style(axes, axis: str = "x") -> None:
+    """Apply the recessive grid and axis treatment shared by every chart.
+
+    Args:
+        axes: Target axes.
+        axis: Which axis carries gridlines, ``"x"``, ``"y"`` or ``"both"``.
+    """
     axes.set_facecolor(SURFACE)
-    axes.grid(axis="x", color=GRID, linewidth=0.8, alpha=0.9)
+    axes.grid(axis=axis, color=GRID, linewidth=0.7, alpha=0.9)
     axes.set_axisbelow(True)
     for side in ("top", "right", "left"):
         axes.spines[side].set_visible(False)
     axes.spines["bottom"].set_color(GRID)
-    axes.tick_params(colors=TEXT_SECONDARY, labelsize=9, length=0)
+    axes.spines["bottom"].set_linewidth(0.9)
+    axes.tick_params(colors=TEXT_SECONDARY, labelsize=TICK_SIZE, length=0, pad=6)
 
 
 def load_comparison_rows(split: str = "val") -> list[dict]:
@@ -293,6 +317,266 @@ def build_per_class_chart(path: Path, csv_path: Path | None = None) -> Path:
 
     figure.tight_layout(rect=(0, 0, 1, top))
     figure.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, dpi=150, facecolor=SURFACE)
+    plt.close(figure)
+    return path
+
+
+# --------------------------------------------------------------------------
+# Speed against accuracy
+# --------------------------------------------------------------------------
+
+
+def load_latency(path: Path | None = None) -> dict[str, dict]:
+    """Read the latency table produced by the benchmark.
+
+    Args:
+        path: CSV to read. Defaults to ``reports/latency.csv``.
+
+    Returns:
+        Mapping of run name to its timing row.
+
+    Raises:
+        FileNotFoundError: If the benchmark has not been run.
+    """
+    path = path or (REPORTS_DIR / "latency.csv")
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"{path} not found. Run doclayout_ft.evaluation.benchmark first.")
+    rows = {}
+    with path.open(newline="") as handle:
+        for row in csv.DictReader(handle):
+            try:
+                rows[row["model"]] = {
+                    "median_ms": float(row["median_ms"]),
+                    "fps": float(row["fps"]),
+                    "params_m": float(row["params_m"]),
+                }
+            except (TypeError, ValueError):
+                continue
+    return rows
+
+
+def build_speed_accuracy_chart(path: Path, split: str = "val") -> Path:
+    """Render latency against accuracy, the chart that answers "which to run".
+
+    A scatter, because the question is about the relationship between two
+    measures rather than the magnitude of one. Faster is left, better is up, so
+    the desirable corner is top-left and no legend is needed to say which
+    direction is good.
+
+    Both `yolo11n` and `yolo11s` families appear. The point the chart makes is
+    that the whole `yolo11n` cluster sits within noise of `yolo11s` on accuracy
+    while running meaningfully faster, which the ranked bar chart cannot show.
+
+    Args:
+        path: Destination PNG.
+        split: Evaluation split the scores come from.
+
+    Returns:
+        The path written.
+    """
+    rows = load_comparison_rows(split)
+    timings = load_latency()
+    points = [(r, timings[r["run"]]) for r in rows if r["run"] in timings]
+    if not points:
+        raise FileNotFoundError(
+            "No model appears in both the evaluation and latency tables.")
+
+    figure, axes = plt.subplots(figsize=(9.5, 6.4))
+    figure.patch.set_facecolor(SURFACE)
+    _style(axes, axis="both")
+
+    for row, timing in points:
+        failed = row["lineage"] == "failed"
+        recommended = row["recommended"]
+        axes.scatter(
+            timing["median_ms"], row["score"],
+            s=210 if recommended else 130,
+            facecolor=ACCENT if recommended else (SURFACE if failed else MUTED),
+            edgecolor=ACCENT if recommended else MUTED,
+            linewidth=1.8 if failed else 1.2,
+            zorder=5 if recommended else 4,
+        )
+
+    # Latency is essentially decided by architecture and resolution, so the
+    # variants pile into three tight clusters. Label one representative of each
+    # rather than seventeen overlapping names, and say how many share the spot.
+    fastest = min(points, key=lambda p: p[1]["median_ms"])
+    best = max(points, key=lambda p: p[0]["score"])
+    recommended = next((p for p in points if p[0]["recommended"]), None)
+
+    latencies = [t["median_ms"] for _, t in points]
+    span = max(latencies) - min(latencies)
+    axes.set_xlim(min(latencies) - span * 0.14, max(latencies) + span * 0.14)
+
+    labelled = []
+    for entry, note in ((fastest, "fastest"), (best, "best mAP"),
+                        (recommended, "recommended")):
+        if entry is None or entry[0]["subfolder"] in {e[0] for e in labelled}:
+            continue
+        labelled.append((entry[0]["subfolder"], entry, note))
+
+    # Offsets are per role rather than computed, because the three clusters sit
+    # in known places and the empty space differs for each: below the fastest,
+    # above the other two.
+    offsets = {"fastest": (0, -34), "best mAP": (0, 30), "recommended": (0, 30)}
+    for subfolder, (row, timing), note in labelled:
+        axes.annotate(
+            f"{subfolder}\n{note}",
+            (timing["median_ms"], row["score"]),
+            textcoords="offset points", xytext=offsets[note],
+            ha="center", va="center", fontsize=VALUE_SIZE, linespacing=1.6,
+            color=TEXT_PRIMARY if row["recommended"] else TEXT_SECONDARY,
+            fontweight="bold" if row["recommended"] else "normal",
+        )
+
+    # Name the crowd rather than leaving it unexplained, anchored just under it.
+    dense = [(r, t) for r, t in points
+             if 15 <= t["median_ms"] <= 25 and r["score"] >= 0.70]
+    if len(dense) > 3:
+        axes.annotate(
+            f"{len(dense)} variants sit in this latency band: yolo11n at 1024,\n"
+            f"spanning {min(r['score'] for r, _ in dense):.3f} to "
+            f"{max(r['score'] for r, _ in dense):.3f} mAP",
+            (statistics.fmean(t["median_ms"] for _, t in dense),
+             min(r["score"] for r, _ in dense)),
+            textcoords="offset points", xytext=(0, -26), ha="center", va="top",
+            fontsize=8.6, color=TEXT_SECONDARY, linespacing=1.6)
+
+    axes.set_xlabel("Median latency per page, milliseconds  (lower is better)",
+                    fontsize=LABEL_SIZE, color=TEXT_SECONDARY, labelpad=10)
+    axes.set_ylabel("mAP50-95  (higher is better)",
+                    fontsize=LABEL_SIZE, color=TEXT_SECONDARY, labelpad=10)
+
+    handles = [
+        plt.Line2D([], [], marker="o", linestyle="none", markersize=11,
+                   markerfacecolor=ACCENT, markeredgecolor=ACCENT),
+        plt.Line2D([], [], marker="o", linestyle="none", markersize=9,
+                   markerfacecolor=MUTED, markeredgecolor=MUTED),
+        plt.Line2D([], [], marker="o", linestyle="none", markersize=9,
+                   markerfacecolor=SURFACE, markeredgecolor=MUTED,
+                   markeredgewidth=1.8),
+    ]
+    legend = axes.legend(handles,
+                         ["Recommended", "Other published variants",
+                          "Failed experiment"],
+                         loc="lower right", frameon=False, fontsize=TICK_SIZE,
+                         borderpad=0.9, labelspacing=0.8)
+    for text in legend.get_texts():
+        text.set_color(TEXT_SECONDARY)
+
+    top = _titles(
+        figure, "Speed against accuracy",
+        "The desirable corner is top-left. The yolo11n cluster is within noise "
+        "of yolo11s and meaningfully faster.")
+    _caption(figure,
+             "Batch 1, GTX 1650, each model at its own training resolution. "
+             "Excludes image decode, which is identical for every model.")
+
+    figure.tight_layout(rect=(0, 0.035, 1, top))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, dpi=150, facecolor=SURFACE)
+    plt.close(figure)
+    return path
+
+
+# --------------------------------------------------------------------------
+# Precision against recall
+# --------------------------------------------------------------------------
+
+
+def build_precision_recall_chart(path: Path, split: str = "val") -> Path:
+    """Render each model's precision and recall as a connected pair.
+
+    A dumbbell rather than two bar series. The reader's question is "is this
+    model trigger-happy or cautious", which is about the gap between the two
+    numbers for one model, not about ranking all the precisions against all the
+    recalls. Paired bars would put that gap in two separate rows.
+
+    Args:
+        path: Destination PNG.
+        split: Evaluation split the scores come from.
+
+    Returns:
+        The path written.
+
+    Raises:
+        FileNotFoundError: If the evaluation table is missing.
+    """
+    from doclayout_ft.hub.push_to_hub import (
+        DUPLICATE_OF, PUBLISH_ORDER, subfolder_for,
+    )
+
+    table = REPORTS_DIR / f"evaluation_{split}.csv"
+    if not table.is_file():
+        raise FileNotFoundError(
+            f"{table} not found. Run doclayout_ft.evaluation.evaluate first.")
+
+    scores = {}
+    with table.open(newline="") as handle:
+        for row in csv.DictReader(handle):
+            try:
+                scores[row["model"]] = (float(row["precision"]),
+                                        float(row["recall"]),
+                                        float(row["mAP50-95"]))
+            except (TypeError, ValueError):
+                continue
+
+    rows = []
+    for run, _ in PUBLISH_ORDER:
+        if run in DUPLICATE_OF or run not in scores:
+            continue
+        precision, recall, score = scores[run]
+        rows.append({"subfolder": subfolder_for(run), "precision": precision,
+                     "recall": recall, "score": score})
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    positions = list(range(len(rows)))[::-1]
+
+    figure, axes = plt.subplots(figsize=(9.5, 0.40 * len(rows) + 2.4))
+    figure.patch.set_facecolor(SURFACE)
+    _style(axes)
+
+    for y, row in zip(positions, rows):
+        low, high = sorted((row["precision"], row["recall"]))
+        axes.plot([low, high], [y, y], color=MUTED, linewidth=2.4,
+                  solid_capstyle="round", zorder=2)
+        axes.scatter(row["precision"], y, s=70, facecolor=ACCENT,
+                     edgecolor=SURFACE, linewidth=1.4, zorder=4)
+        axes.scatter(row["recall"], y, s=70, facecolor=TEXT_SECONDARY,
+                     edgecolor=SURFACE, linewidth=1.4, zorder=4)
+
+    axes.set_yticks(positions)
+    axes.set_yticklabels([r["subfolder"] for r in rows], fontsize=TICK_SIZE,
+                         color=TEXT_PRIMARY, fontfamily="DejaVu Sans Mono")
+    axes.set_ylim(-0.8, len(rows) - 0.3)
+    lowest = min(min(r["precision"], r["recall"]) for r in rows)
+    axes.set_xlim(max(0.0, lowest - 0.025), 1.0)
+    axes.set_xlabel("Score  ·  rows ordered by mAP50-95",
+                    fontsize=LABEL_SIZE, color=TEXT_SECONDARY, labelpad=10)
+
+    handles = [
+        plt.Line2D([], [], marker="o", linestyle="none", markersize=9,
+                   markerfacecolor=ACCENT, markeredgecolor=ACCENT),
+        plt.Line2D([], [], marker="o", linestyle="none", markersize=9,
+                   markerfacecolor=TEXT_SECONDARY, markeredgecolor=TEXT_SECONDARY),
+    ]
+    legend = axes.legend(handles, ["Precision", "Recall"], loc="lower right",
+                         frameon=False, fontsize=TICK_SIZE, borderpad=0.9,
+                         labelspacing=0.8)
+    for text in legend.get_texts():
+        text.set_color(TEXT_SECONDARY)
+
+    top = _titles(
+        figure, "Precision against recall",
+        "A wide gap means the model leans one way: more misses, or more false "
+        "boxes. Most sit close to balanced.")
+    _caption(figure,
+             "The x-axis starts near the lowest value rather than zero: these "
+             "are positions on a scale, not lengths to compare.")
+
+    figure.tight_layout(rect=(0, 0.03, 1, top))
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(figure)

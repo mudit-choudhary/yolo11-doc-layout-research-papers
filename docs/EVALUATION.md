@@ -113,6 +113,48 @@ names, an artefact of the run naming during the sprint. The same holds for
 `Table` and `Text`, the two classes that matter most for chunking, are at 0.99
 and 0.92. That is the result worth taking from this table.
 
+## Latency
+
+Accuracy alone cannot answer which model to run. Measured at batch 1 on the
+GTX 1650, each model at its own resolution, excluding image decode:
+
+```bash
+python -m doclayout_ft.evaluation.benchmark
+```
+
+| Configuration | Params | GFLOPs | Median | FPS |
+|---|---|---|---|---|
+| yolo11n at 640 | 2.58 M | 6.4 | 9 – 11 ms | 87 – 106 |
+| yolo11n at 1024 | 2.58 M | 16.6 | 18 – 19 ms | 54 – 56 |
+| yolo11s at 1024 | 9.42 M | 55.4 | 36 – 37 ms | 27 – 28 |
+
+Latency is decided almost entirely by architecture and resolution. Within a
+configuration, every variant times the same to within a millisecond, because
+they differ only in weights.
+
+Image decode is excluded because it costs the same for every model, roughly
+60 to 80 ms for a 2550x3301 JPEG, and would have added a constant that hides
+the differences. Warmup inferences are discarded and the GPU is synchronised
+around each timed region; without the sync the measurement would be of how fast
+Python queues work, not how fast it finishes.
+
+### The trade this exposes
+
+| Model | mAP50-95 | Median | Verdict |
+|---|---|---|---|
+| `12-yolo11s-1024` | 0.7694 | 37 ms | Accuracy pick. Leads on Table and Footnote. |
+| `11-yolo11n-1024` | 0.7661 | 19 ms | **Half the latency for 0.003 mAP.** |
+| `05-yolo11n-640` | 0.7376 | 9 ms | Four times the throughput, small classes suffer. |
+
+0.003 mAP50-95 is inside noise. A 2x latency difference is not. For a pipeline
+processing pages in bulk, `yolo11n` at 1024 is the better engineering choice,
+and the earlier recommendation of `yolo11s` was made without this measurement
+in hand.
+
+`yolo11s` keeps a real advantage on `Table` (0.985) and `Footnote`, the two
+classes that decide chunk boundaries, so it remains the right pick when
+boundary quality matters more than throughput. Both are published.
+
 ## Findings
 
 ### Resolution was the largest lever

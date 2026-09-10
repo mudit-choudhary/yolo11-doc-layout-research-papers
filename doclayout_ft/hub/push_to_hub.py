@@ -54,7 +54,12 @@ from pathlib import Path
 
 from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
 from doclayout_ft.config import FINETUNED_DIR, MODELS_DIR, REPORTS_DIR, ROOT
-from doclayout_ft.hub.charts import build_comparison_chart, build_per_class_chart
+from doclayout_ft.hub.charts import (
+    build_comparison_chart,
+    build_per_class_chart,
+    build_precision_recall_chart,
+    build_speed_accuracy_chart,
+)
 from doclayout_ft.hub.model_card import (
     build_index_card,
     build_variant_card,
@@ -71,7 +76,8 @@ DEFAULT_LIMIT = 2
 #: Charts shown on the root card. Regenerated whenever the card is, so they can
 #: never disagree with the table beside them. Written into reports/ and uploaded
 #: to the repository root, which the card references by relative path.
-INDEX_CHARTS = ("comparison.png", "per-class.png")
+INDEX_CHARTS = ("comparison.png", "speed-accuracy.png",
+                "precision-recall.png", "per-class.png")
 
 #: Records which runs are already in the repository, so repeated runs advance
 #: the backlog. It also caches each variant's metrics, so the root card can be
@@ -176,7 +182,8 @@ RUN_PASSES: dict[str, int] = {
 #: comment beyond their score and pass count.
 RUN_STATUS: dict[str, str] = {
     "yolo11s_doc_layout_imgsz_1024": "**Recommended**",
-    "yolo11n_doc_layout_imgsz_1024": "Fastest",
+    "yolo11n_doc_layout_imgsz_1024": "Half the latency, same mAP",
+    "yolo11_doc_layout_v2224_round03": "Fastest overall",
     "yolo11_doc_layout_v2224_imgsz_1024": "Leads by 0.002, within noise",
     "yolo11_doc_layout_v2": "Earliest run",
     "yolo11_doc_layout_v22": "Early run",
@@ -349,6 +356,13 @@ def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
     Returns:
         One entry per published variant.
     """
+    try:
+        from doclayout_ft.hub.charts import load_latency
+        latencies = load_latency()
+    except FileNotFoundError:
+        # The table simply shows "-" for latency until the benchmark is run.
+        latencies = {}
+
     return [
         {
             "name": name,
@@ -365,6 +379,9 @@ def index_entries(ledger: dict[str, dict]) -> list[dict[str, object]]:
                        else record.get("status", "")),
             "passes": (passes_for(name) if name in _SUBFOLDER_BY_RUN
                        else record.get("passes")),
+            # Latency is a measurement, not a publish fact, so it is re-read
+            # from the benchmark table rather than frozen into the ledger.
+            "latency_ms": latencies.get(name, {}).get("median_ms"),
             "imgsz": record.get("imgsz", "?"),
             "metrics": record.get("metrics", {}),
             "held_out": record.get("metrics_from_held_out_eval", True),
@@ -461,8 +478,9 @@ def update_index(api, repo_id: str, ledger: dict[str, dict], split: str,
     print(f"Root card: {repo_id}/README.md "
           f"({len(card.splitlines())} lines, {len(ledger)} variant(s) listed)")
     charts: list[Path] = []
-    for name, builder in zip(INDEX_CHARTS,
-                             (build_comparison_chart, build_per_class_chart)):
+    builders = (build_comparison_chart, build_speed_accuracy_chart,
+                build_precision_recall_chart, build_per_class_chart)
+    for name, builder in zip(INDEX_CHARTS, builders):
         try:
             charts.append(builder(REPORTS_DIR / name))
             print(f"           {name} regenerated")

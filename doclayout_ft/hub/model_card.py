@@ -214,12 +214,14 @@ def build_index_card(
 
     if ordered:
         rows = "\n".join(
-            "| `{subfolder}`{mark} | {imgsz} | {passes} | {mAP5095} | {status} |".format(
+            "| `{subfolder}`{mark} | {imgsz} | {passes} | {mAP5095} | {ms} | "
+            "{status} |".format(
                 subfolder=entry["subfolder"],
                 mark="" if entry.get("held_out", True) else " †",
                 imgsz=entry["imgsz"],
                 passes=entry.get("passes") or "?",
                 mAP5095=entry["metrics"].get("mAP50-95", "n/a"),
+                ms=f"{entry['latency_ms']:.0f}" if entry.get("latency_ms") else "-",
                 status=entry.get("status", "") or "",
             )
             for entry in ordered
@@ -230,8 +232,8 @@ def build_index_card(
         # in order to choose. All four measures remain on each variant's own
         # card and in results.csv.
         table = (
-            "| Variant | imgsz | Passes | mAP50-95 | Notes |\n"
-            "|---|---|---|---|---|\n" + rows
+            "| Variant | imgsz | Passes | mAP50-95 | ms/page | Notes |\n"
+            "|---|---|---|---|---|---|\n" + rows
         )
         if any_training_time:
             table += (
@@ -282,16 +284,25 @@ Fine-tuned from [`{BASE_REPO_ID}`](https://huggingface.co/{BASE_REPO_ID}).
 
 ## Which one to use
 
-**`{RECOMMENDED_RUN}`** unless you have a reason to
-pick otherwise. It is the strongest model with a clean training lineage, and it
-leads on `Table` and `Footnote`, the classes that decide where a chunk boundary
-falls.
+Two answers, depending on what you are doing.
 
-One other checkpoint, `08-yolo11n-1024`, scores about 0.002 higher. That is
-within noise, and it is the product of three successive fine-tuning passes over
-datasets that no longer exist in their original form, which makes it far harder
-to reproduce or reason about. The recommendation is for the simpler lineage, not
-because the numbers separate them.
+**`12-yolo11s-1024` for accuracy on the classes that matter.** It has a clean
+single-pass lineage and leads on `Table` (0.985) and `Footnote`, which decide
+where a chunk boundary falls. It costs 37 ms per page.
+
+**`11-yolo11n-1024` for throughput.** It scores 0.766 against 0.769, a
+difference well inside noise, at **19 ms per page**. Half the latency for
+three thousandths of mAP is the better engineering trade for most pipelines,
+and it is the choice to default to if you are processing pages in bulk.
+
+If pages are small or the corpus is huge, `05-yolo11n-640` runs at 9 ms and
+still reaches 0.738, though small classes such as `Footnote` and `Page-header`
+suffer at 640.
+
+`08-yolo11n-1024` scores about 0.002 higher than either, which is also within
+noise. It is not recommended because it is the product of three successive
+fine-tuning passes over datasets that no longer exist in their original form,
+so it cannot be reproduced. Prefer a lineage you can rebuild.
 
 ### Reading the table
 
@@ -303,6 +314,10 @@ reproduce it with a single command. **2 or more** means the earliest passes used
 datasets that no longer exist in their original form, so it cannot be rebuilt
 from scratch, and it has been shaped by several dataset versions rather than
 one.
+
+**ms/page** is median inference latency at batch 1 on a GTX 1650, each model at
+its own resolution, excluding image decode. Add roughly 60 to 80 ms per page for
+decode to get a wall-clock figure.
 
 Precision, recall and mAP50 are on each variant's own card, alongside its full
 training configuration.
@@ -347,6 +362,29 @@ The headline number is an average over twelve classes that range from 0.985 to
 most affect where a chunk boundary falls, are the strongest. `Page-footer` is
 the one real weakness, and it is a labelling problem rather than a model one:
 see Limitations.
+
+### Speed against accuracy
+
+![Scatter plot of median latency per page against mAP50-95 for every published
+variant. Three clusters: yolo11n at 640 near 10 ms and 0.52 to 0.74, yolo11n at
+1024 near 18 ms and 0.71 to 0.77, and yolo11s at 1024 near 37 ms and 0.75 to
+0.77. The recommended 12-yolo11s-1024 is highlighted at the far
+right.](speed-accuracy.png)
+
+Latency is decided almost entirely by architecture and resolution, so the
+variants fall into three tight bands. Within the 1024 band, nine yolo11n
+variants span 0.01 mAP at identical speed.
+
+### Precision against recall
+
+![Dumbbell chart showing precision and recall for each variant on one row,
+joined by a line. Most models sit close to balanced near 0.85 to 0.93; the
+earliest run 01-yolo11n-640 shows the widest gap, with precision 0.776 against
+recall 0.656.](precision-recall.png)
+
+A wide gap means the model leans one way. High precision with low recall misses
+regions; the reverse invents them. The early runs are visibly unbalanced and the
+later ones are not, which is most of what fine-tuning bought.
 
 ## Usage
 
@@ -583,6 +621,29 @@ from `{parent_label}`.
 {row}
 
 {source}
+
+### Speed against accuracy
+
+![Scatter plot of median latency per page against mAP50-95 for every published
+variant. Three clusters: yolo11n at 640 near 10 ms and 0.52 to 0.74, yolo11n at
+1024 near 18 ms and 0.71 to 0.77, and yolo11s at 1024 near 37 ms and 0.75 to
+0.77. The recommended 12-yolo11s-1024 is highlighted at the far
+right.](speed-accuracy.png)
+
+Latency is decided almost entirely by architecture and resolution, so the
+variants fall into three tight bands. Within the 1024 band, nine yolo11n
+variants span 0.01 mAP at identical speed.
+
+### Precision against recall
+
+![Dumbbell chart showing precision and recall for each variant on one row,
+joined by a line. Most models sit close to balanced near 0.85 to 0.93; the
+earliest run 01-yolo11n-640 shows the widest gap, with precision 0.776 against
+recall 0.656.](precision-recall.png)
+
+A wide gap means the model leans one way. High precision with low recall misses
+regions; the reverse invents them. The early runs are visibly unbalanced and the
+later ones are not, which is most of what fine-tuning bought.
 
 ## Usage
 
