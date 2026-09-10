@@ -13,6 +13,7 @@ Everything here runs on a single 4 GB GPU.
 
 | | |
 |---|---|
+| Published models | [darkdwine/yolo11-doc-layout-research-papers](https://huggingface.co/darkdwine/yolo11-doc-layout-research-papers) |
 | Recommended model | `yolo11s_doc_layout_imgsz_1024` |
 | mAP50-95 | 0.769 on held-out validation |
 | Base checkpoint | [`Armaggheddon/yolo11-document-layout`](https://huggingface.co/Armaggheddon/yolo11-document-layout) |

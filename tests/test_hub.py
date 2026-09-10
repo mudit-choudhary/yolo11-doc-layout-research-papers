@@ -631,3 +631,13 @@ def test_a_removed_note_is_not_resurrected_from_the_ledger():
                    "metrics": {}, "status": "Chained lineage"}}
 
     assert push_to_hub.index_entries(stale)[0]["status"] == ""
+
+
+def test_index_card_links_the_training_code_repo():
+    from doclayout_ft.hub.model_card import GITHUB_REPO_URL, build_index_card
+    card = build_index_card("ns/coll", [
+        {"name": "a", "subfolder": "12-yolo11s-1024", "imgsz": 1024,
+         "metrics": {"mAP50-95": "0.7694"}},
+    ])
+    assert f"]({GITHUB_REPO_URL})" in card
+    assert "Training code" in card

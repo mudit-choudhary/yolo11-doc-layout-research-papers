@@ -47,6 +47,17 @@ METRIC_COLUMNS = ("precision", "recall", "mAP50", "mAP50-95")
 #: Run recommended to anyone who does not want to read the comparison table.
 RECOMMENDED_RUN = "yolo11s_doc_layout_imgsz_1024"
 
+#: The pipeline that produced these weights: doclayout_ft, its docs, and the
+#: fine-tuning steps, linked so anyone on the Hub can find how to reproduce a
+#: variant or train their own. The model repo carries weights and metrics only
+#: (see "Training images are not distributed" below); the code lives here
+#: instead of being duplicated into the model repo, so there is one place to
+#: keep it current.
+GITHUB_REPO_URL = "https://github.com/mudit-choudhary/yolo11-doc-layout-research-papers"
+
+#: Display form of the above, e.g. "mudit-choudhary/yolo11-doc-layout-research-papers".
+GITHUB_REPO_LABEL = GITHUB_REPO_URL.removeprefix("https://github.com/")
+
 #: Runs whose diagnostic plots were produced after the fact rather than by the
 #: training run itself. Training ended before Ultralytics' final validation
 #: pass, so no confusion matrix or curves were written. They were regenerated
@@ -263,6 +274,12 @@ types below on a page image, which is what makes layout-aware chunking of a
 paper possible: text can be split on the paragraph and section boundaries the
 model found, instead of on a fixed character count that cuts through the middle
 of a table.
+
+**Training code:** [{GITHUB_REPO_LABEL}]({GITHUB_REPO_URL}). The full pipeline is
+there: PDF rendering, dataset splitting, fine-tuning, evaluation, latency
+benchmarking, and this card's own generator. It is tested and runs end to end.
+This repository holds weights and metrics only; the training images are not
+included, for the reasons given under Limitations.
 
 Every variant lives in its own subfolder of this one repository, numbered
 oldest to newest. Each has its own `README.md` with its full training
