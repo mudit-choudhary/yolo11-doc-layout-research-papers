@@ -156,7 +156,10 @@ def write_chart(rows: list[dict[str, object]], path: Path, title: str) -> None:
     axes.set_xlim(0, 1)
     axes.grid(axis="x", alpha=0.25, linestyle=":")
     axes.set_axisbelow(True)
-    axes.set_title(title)
+    # pad=20 (default 6.0) leaves real breathing room between the title and
+    # the first bar. tight_layout() reads a title's bbox when sizing margins,
+    # so raising the pad alone is enough -- no rect/subplots_adjust needed.
+    axes.set_title(title, pad=20)
     axes.legend(loc="lower right")
     figure.tight_layout()
     figure.savefig(path, dpi=150)
