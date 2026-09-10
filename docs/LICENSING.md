@@ -76,8 +76,8 @@ changing it after other people contribute is not.
 
 ## X-AnyLabeling: no obligation on your annotations
 
-X-AnyLabeling is **GPL-3.0**. That licence covers **the software**, not what you
-produce with it.
+[X-AnyLabeling](https://github.com/CVHub520/X-AnyLabeling) is **GPL-3.0**. That
+licence covers **the software**, not what you produce with it.
 
 GPL has never claimed ownership of a program's output. Using GIMP does not make
 your image GPL; using a GPL compiler does not make your binary GPL. The same

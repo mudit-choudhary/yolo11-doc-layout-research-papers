@@ -423,7 +423,8 @@ base taxonomy has no equivalent for.
 ## Training data
 
 Pages rendered from arXiv PDFs at 300 DPI and annotated by hand in
-X-AnyLabeling, exported in YOLO horizontal-bounding-box format.
+[X-AnyLabeling](https://github.com/CVHub520/X-AnyLabeling), exported in YOLO
+horizontal-bounding-box format.
 
 850 pages from 566 papers are annotated and used for training and evaluation.
 They are a labelled subset of a much larger unlabelled pool of roughly 22,000

@@ -40,7 +40,7 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")  # No display on a training box.
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyBboxPatch
+import matplotlib.patheffects as path_effects
 
 from doclayout_ft.config import REPORTS_DIR
 
@@ -221,7 +221,11 @@ def build_comparison_chart(path: Path, split: str = "val") -> Path:
         if row["recommended"]:
             label.set_fontweight("bold")
 
-    axes.set_ylim(-0.7, len(rows) - 0.3)
+    # Padding above the first bar and below the last was 0.39 data-units on
+    # each side (bar height 0.62, ylim margin 0.7), which read as dead space
+    # at the top and bottom of a chart that is otherwise tightly packed.
+    # Halved to ~0.19 each side.
+    axes.set_ylim(-0.5, len(rows) - 0.5)
     axes.set_xlim(0, max(r["score"] for r in rows) * 1.14)
     axes.set_xlabel("mAP50-95 on the held-out validation split",
                     fontsize=9.5, color=TEXT_SECONDARY, labelpad=8)
@@ -292,16 +296,22 @@ def build_per_class_chart(path: Path, csv_path: Path | None = None) -> Path:
 
     # One series, so one colour for every bar. Colouring by value would
     # double-encode length as hue and spend the free channel on nothing.
+    halo = [path_effects.withStroke(linewidth=3, foreground=SURFACE)]
+
     for y, (_, score) in zip(positions, rows):
         axes.barh(y, score, height=0.62, color=ACCENT, linewidth=0, zorder=2)
-        axes.text(score + 0.008, y, f"{score:.3f}", va="center", ha="left",
-                  fontsize=9, color=TEXT_SECONDARY)
+        label = axes.text(score + 0.008, y, f"{score:.3f}", va="center",
+                          ha="left", fontsize=VALUE_SIZE, color=TEXT_SECONDARY,
+                          zorder=6)
+        label.set_path_effects(halo)
 
     if overall is not None:
         axes.axvline(overall, color=TEXT_SECONDARY, linewidth=1.3,
                      linestyle=(0, (4, 3)), zorder=3)
-        axes.text(overall - 0.012, -0.55, f"overall {overall:.3f}", fontsize=9,
-                  color=TEXT_SECONDARY, ha="right", va="center")
+        note = axes.text(overall - 0.012, -0.55, f"overall {overall:.3f}",
+                         fontsize=VALUE_SIZE, color=TEXT_SECONDARY, ha="right",
+                         va="center", zorder=6)
+        note.set_path_effects(halo)
 
     axes.set_yticks(positions)
     axes.set_yticklabels([c for c, _ in rows], fontsize=9.5, color=TEXT_PRIMARY)
@@ -316,7 +326,6 @@ def build_per_class_chart(path: Path, csv_path: Path | None = None) -> Path:
         "which is an annotation problem.")
 
     figure.tight_layout(rect=(0, 0, 1, top))
-    figure.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=150, facecolor=SURFACE)
     plt.close(figure)
