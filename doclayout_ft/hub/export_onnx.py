@@ -11,8 +11,14 @@ Each run is exported at the image size it was trained at, read from its
 costs accuracy, and an ONNX graph baked at the wrong resolution is a silent
 version of that mistake, since the file gives no hint of what it expects.
 
-Requires ``ultralytics`` and ``onnx`` in the environment; Ultralytics installs
-the missing export extras itself on first run.
+Every export is checked against the checkpoint it came from before it counts as
+done: the same random tensor goes through the fused PyTorch model and through
+the ONNX graph, and the outputs have to agree. A graph that silently exports
+wrong looks exactly like one that exported right, and the point of publishing
+these is that someone loads them instead of the weights.
+
+Requires ``ultralytics``, ``onnx`` and ``onnxruntime`` in the environment;
+Ultralytics installs the missing export extras itself on first run.
 
 Usage::
 
@@ -29,7 +35,7 @@ import sys
 from pathlib import Path
 
 from doclayout_ft.checkpoints import Checkpoint, discover_many, filter_by_name
-from doclayout_ft.config import FINETUNED_DIR, MODELS_DIR
+from doclayout_ft.config import FINETUNED_DIR, MODELS_DIR, ROOT
 from doclayout_ft.hub.push_to_hub import load_ledger, pending_checkpoints, subfolder_for
 
 #: ONNX opset. 12 is old enough for every runtime anyone is likely to load
@@ -37,10 +43,39 @@ from doclayout_ft.hub.push_to_hub import load_ledger, pending_checkpoints, subfo
 #: ops. Raise it only if a runtime asks for something newer.
 OPSET = 12
 
+#: How far the ONNX graph's output may drift from the PyTorch model's, relative
+#: to the largest value in it. Conv/BN fusion and onnxslim reorder float
+#: arithmetic, so the two never match bit for bit; observed drift across the
+#: seventeen published runs is 1e-6 to 3e-6. Anything near this bound is a
+#: broken export, not rounding.
+MAX_RELATIVE_DRIFT = 1e-4
+
 
 def onnx_path(checkpoint: Checkpoint) -> Path:
     """Where this run's ONNX export lives, whether or not it exists yet."""
     return checkpoint.weights.with_suffix(".onnx")
+
+
+def portable_data_arg(data: str) -> str:
+    """Reduce a recorded dataset path to one that means something elsewhere.
+
+    A checkpoint records the dataset it was trained on as an absolute path on
+    the machine that trained it, and Ultralytics copies that string into the
+    ONNX ``description`` metadata. A published file should not carry somebody's
+    home directory, so it is cut down to a repository-relative path, which is
+    the part that is actually informative.
+
+    Args:
+        data: The ``data`` value recorded in the checkpoint.
+
+    Returns:
+        The path relative to the repository root, or its file name if it points
+        somewhere outside the repository entirely.
+    """
+    try:
+        return str(Path(data).resolve().relative_to(ROOT))
+    except ValueError:
+        return Path(data).name
 
 
 def export_one(checkpoint: Checkpoint, overwrite: bool) -> Path:
@@ -60,10 +95,50 @@ def export_one(checkpoint: Checkpoint, overwrite: bool) -> Path:
 
     from ultralytics import YOLO
 
-    written = YOLO(str(checkpoint.weights)).export(
+    model = YOLO(str(checkpoint.weights))
+    data = getattr(model.model, "args", {}).get("data")
+    if data:
+        model.model.args["data"] = portable_data_arg(data)
+
+    written = model.export(
         format="onnx", imgsz=checkpoint.imgsz, opset=OPSET, simplify=True,
     )
     return Path(written)
+
+
+def verify(checkpoint: Checkpoint, onnx_file: Path) -> float:
+    """Compare the exported graph against the checkpoint it came from.
+
+    Args:
+        checkpoint: The run that was exported.
+        onnx_file: The graph written for it.
+
+    Returns:
+        Largest output difference, relative to the largest output value.
+
+    Raises:
+        AssertionError: If the two disagree by more than
+            :data:`MAX_RELATIVE_DRIFT`, or if the graph takes an input shape
+            other than the one it was exported for.
+    """
+    import numpy as np
+    import onnxruntime as ort
+    import torch
+    from ultralytics import YOLO
+
+    size = checkpoint.imgsz
+    session = ort.InferenceSession(str(onnx_file), providers=["CPUExecutionProvider"])
+    shape = session.get_inputs()[0].shape
+    assert shape == [1, 3, size, size], f"{onnx_file} takes {shape}, expected [1, 3, {size}, {size}]"
+
+    sample = torch.rand(1, 3, size, size)
+    with torch.no_grad():
+        expected = YOLO(str(checkpoint.weights)).model.fuse().eval()(sample)[0].numpy()
+    actual = session.run(None, {"images": sample.numpy()})[0]
+
+    drift = float(np.abs(expected - actual).max() / max(np.abs(expected).max(), 1e-9))
+    assert drift < MAX_RELATIVE_DRIFT, f"{onnx_file} drifts {drift:.2e} from {checkpoint.weights}"
+    return drift
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
               f"(imgsz {checkpoint.imgsz}) ===")
         try:
             out = export_one(checkpoint, args.overwrite)
-            print(f"  {out}  {out.stat().st_size / (1024 * 1024):.1f} MB")
+            print(f"  {out}  {out.stat().st_size / (1024 * 1024):.1f} MB  "
+                  f"matches best.pt to {verify(checkpoint, out):.1e}")
         except Exception as exc:  # noqa: BLE001 - one failure must not sink the sweep
             failures.append((checkpoint.name, exc))
             print(f"  FAILED: {exc}", file=sys.stderr)

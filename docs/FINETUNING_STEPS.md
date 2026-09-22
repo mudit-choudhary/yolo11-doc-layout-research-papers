@@ -98,10 +98,18 @@ pointed `train:` and `val:` at the same image folder, so every metric from that
 period is void. `round_final` is the first round split honestly.
 
 **Why absolute paths in the list files.** Ultralytics only prefixes the
-dataset's `path:` onto entries beginning with `./`. Any other relative entry is
+dataset root onto entries beginning with `./`. Any other relative entry is
 resolved against the working directory at train time, not the dataset
 directory. Absolute paths make the lists correct wherever training is launched
-from.
+from. The list files are untracked, so nothing machine-specific is committed.
+
+**Why no `path:` key in `data.yaml`.** Without it Ultralytics takes the
+directory holding the yaml as the dataset root, which is already the right
+answer. With it, the key has to be absolute -- a relative value resolves
+against Ultralytics' global `datasets_dir`, not against the yaml -- and that
+absolute string is copied into every checkpoint's saved arguments and from
+there into exported ONNX metadata, which puts the training machine's directory
+layout into published files.
 
 Defaults are 75 / 15 / 10 by paper, seeded at 42 so the split is reproducible.
 Test takes the remainder rather than its own rounded count, so no paper is ever

@@ -184,6 +184,19 @@ The file is written to `<run>/weights/best.onnx`, beside the weights it came
 from, which is where the publisher looks for it. A run without one still
 publishes; the ONNX row is simply absent.
 
+Every export is verified against the checkpoint it came from before it counts
+as done: the same random tensor through the fused PyTorch model and through the
+ONNX graph, outputs compared. Observed drift across the seventeen runs is 1e-6
+to 3e-6, which is float reordering from Conv/BN fusion and onnxslim, not a
+difference in the model.
+
+One difference is real, and it is in the input, not the weights.
+`YOLO(best.pt).predict()` letterboxes to a *rectangle* by default
+(`rect=True`), padding only to the next stride multiple; the ONNX graph takes a
+fixed square. Detections then differ slightly, and a borderline box can appear
+in one and not the other. Pass `rect=False` to the `.pt` path and the two agree
+box for box. Either is valid; they are not the same preprocessing.
+
 Each graph is baked at its run's own `imgsz` (640 or 1024, read from
 `args.yaml`) with a batch size of 1. A consumer must resize input to that same
 size, which the card's table records per variant. Opset 12, which onnxruntime,

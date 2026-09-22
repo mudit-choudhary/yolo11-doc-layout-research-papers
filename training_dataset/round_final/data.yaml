@@ -1,5 +1,4 @@
-# Pointing to the "Clean" symlink path
-path: /media/mudit/DarkDwine1/ResearchPapersYOLO_FT/training_dataset/round_final
+path: training_dataset/round_final
 train: train.txt
 val: val.txt
 test: test.txt

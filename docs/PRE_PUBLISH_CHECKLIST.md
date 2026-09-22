@@ -94,8 +94,8 @@ The copyright line goes elsewhere, and the repository has one now in
 Copy-paste, top to bottom.
 
 ```bash
-source /home/mudit/Desktop/fenv/bin/activate
-cd /media/mudit/DarkDwine1/ResearchPapersYOLO_FT
+source <your-venv>/bin/activate   # see docs/SETUP.md
+cd <repo-root>
 ```
 
 ### 1. Confirm the tree is sound

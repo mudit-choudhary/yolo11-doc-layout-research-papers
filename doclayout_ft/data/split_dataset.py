@@ -32,7 +32,7 @@ import re
 import sys
 from pathlib import Path
 
-from doclayout_ft.config import DEFAULT_ROUND, IMAGE_EXTENSIONS, TRAINING_DIR
+from doclayout_ft.config import DEFAULT_ROUND, IMAGE_EXTENSIONS, ROOT, TRAINING_DIR
 
 #: Matches the trailing ``_page_07`` produced by
 #: :mod:`doclayout_ft.data.pdf_to_images`. Stripping it turns a page filename
@@ -153,21 +153,36 @@ def write_split_list(path: Path, images: list[Path]) -> None:
 def update_data_yaml(data_yaml: Path, round_dir: Path, has_test: bool) -> None:
     """Repoint a round's ``data.yaml`` at the split lists just written.
 
-    Also rewrites the ``path:`` key to this round's actual location. That key
-    is an absolute path baked in when the file was first authored, so a repo
-    that has been moved or cloned onto another machine would otherwise carry a
-    stale root and fail to find a single image.
+    Also rewrites the ``path:`` key to this round's location **relative to the
+    repository root**. It used to be absolute, which went stale whenever the
+    repo moved and, worse, was copied into every checkpoint's saved arguments
+    and from there into exported ONNX metadata, putting the training machine's
+    directory layout into published files.
+
+    A relative root means training must be launched from the repository root.
+    Ultralytics keeps a relative ``path:`` as-is only while it resolves against
+    the working directory; if it does not, the value is retried against the
+    global ``datasets_dir`` instead and the run fails to find its images. Every
+    command in ``docs/`` is already run from the repo root.
 
     The edit is line-based rather than a YAML round-trip so that comments and
     the hand-maintained ``names:`` block survive untouched.
 
     Args:
         data_yaml: The config file to rewrite in place.
-        round_dir: The round directory, used as the new ``path:`` value.
+        round_dir: The round directory, whose repo-relative path becomes the
+            new ``path:`` value.
         has_test: Whether a ``test.txt`` was written.
     """
     text = data_yaml.read_text()
-    text = re.sub(r"^path:.*$", f"path: {round_dir.resolve()}", text, flags=re.MULTILINE)
+    try:
+        root = round_dir.resolve().relative_to(ROOT)
+    except ValueError:
+        # A round living outside the repository has no repo-relative spelling,
+        # so it keeps an absolute one. Nothing published comes from such a
+        # round; this is for scratch datasets kept elsewhere on disk.
+        root = round_dir.resolve()
+    text = re.sub(r"^path:.*$", f"path: {root}", text, flags=re.MULTILINE)
     text = re.sub(r"^train:.*$", "train: train.txt", text, flags=re.MULTILINE)
     text = re.sub(r"^val:.*$", "val: val.txt", text, flags=re.MULTILINE)
 

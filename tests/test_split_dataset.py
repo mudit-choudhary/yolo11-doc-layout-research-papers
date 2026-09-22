@@ -109,7 +109,9 @@ def test_main_writes_absolute_paths_and_repoints_data_yaml(tmp_path, monkeypatch
     assert "train: train.txt" in yaml_text
     assert "val: val.txt" in yaml_text
     assert "test: test.txt" in yaml_text
-    assert f"path: {round_dir.resolve()}" in yaml_text
+    assert f"path: {round_dir.resolve()}" in yaml_text, (
+        "a round outside the repository keeps an absolute root"
+    )
     assert "/stale/path" not in yaml_text
     assert "names:" in yaml_text, "the hand-maintained names block must survive"
 
@@ -131,3 +133,16 @@ def test_dry_run_writes_nothing(tmp_path, monkeypatch):
 
     assert not (round_dir / "train.txt").exists()
     assert (round_dir / "data.yaml").read_text() == original
+
+
+def test_data_yaml_root_is_relative_to_the_repository(tmp_path, monkeypatch):
+    """An absolute root leaks the training machine into exported metadata."""
+    round_dir = make_round(tmp_path, papers=8, pages_per_paper=2)
+    monkeypatch.setattr(split_dataset, "TRAINING_DIR", tmp_path)
+    monkeypatch.setattr(split_dataset, "ROOT", tmp_path)
+
+    assert split_dataset.main(["--round", "round_test", "--seed", "42"]) == 0
+
+    yaml_text = (round_dir / "data.yaml").read_text()
+    assert "path: round_test" in yaml_text
+    assert str(tmp_path) not in yaml_text
