@@ -241,6 +241,17 @@ def test_files_for_always_normalises_the_weights_name(tmp_path):
     assert "results.png" not in names, "absent artefacts must not be listed"
 
 
+def test_onnx_export_is_published_beside_the_weights(tmp_path):
+    """Exported graphs go up only once they exist, under one fixed name."""
+    run_dir = make_run(tmp_path, "run_a", imgsz=1024)
+    before = [name for _, name in push_to_hub.files_for(discover(tmp_path)["run_a"])]
+    assert "best.onnx" not in before
+
+    (run_dir / "weights" / "best.onnx").write_bytes(b"onnx")
+    after = [name for _, name in push_to_hub.files_for(discover(tmp_path)["run_a"])]
+    assert "best.onnx" in after
+
+
 def test_load_final_epoch_tolerates_padded_column_names(tmp_path):
     """Some Ultralytics versions pad results.csv headers with spaces."""
     run_dir = make_run(tmp_path, "run_a", imgsz=640)

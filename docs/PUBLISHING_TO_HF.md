@@ -148,6 +148,7 @@ python -m doclayout_ft.hub.push_to_hub --repo-id <namespace>/<name> --yes
 |---|---|
 | `README.md` | The generated card for this variant |
 | `best.pt` | The run's best checkpoint |
+| `best.onnx` | The same weights exported to ONNX, when exported |
 | `args.yaml` | Hyperparameters the run was launched with |
 | `results.csv` | Per-epoch metrics |
 | `results.png` | Training curves |
@@ -165,6 +166,40 @@ hf_hub_download(repo_id="darkdwine/yolo11-doc-layout-research-papers",
 
 Only files the run actually produced are uploaded. Older runs that predate some
 of Ultralytics' plot outputs simply publish fewer files.
+
+## ONNX exports
+
+`best.onnx` is not produced by training. Export it first, then publish as
+usual:
+
+```bash
+# What would be exported, and which runs already have a graph.
+python -m doclayout_ft.hub.export_onnx --list
+
+# Export every publishable run, each at the image size it was trained at.
+python -m doclayout_ft.hub.export_onnx
+```
+
+The file is written to `<run>/weights/best.onnx`, beside the weights it came
+from, which is where the publisher looks for it. A run without one still
+publishes; the ONNX row is simply absent.
+
+Each graph is baked at its run's own `imgsz` (640 or 1024, read from
+`args.yaml`) with a batch size of 1. A consumer must resize input to that same
+size, which the card's table records per variant. Opset 12, which onnxruntime,
+OpenCV's DNN module and TensorRT all read.
+
+To add ONNX to variants already on the Hub, re-publish them:
+
+```bash
+python -m doclayout_ft.hub.export_onnx
+python -m doclayout_ft.hub.push_to_hub --include-published --limit 0        # dry run
+python -m doclayout_ft.hub.push_to_hub --include-published --limit 0 --yes
+```
+
+Re-publishing re-sends each variant's card and small plots, but not the
+weights: the Hub deduplicates LFS files by hash, so an unchanged `best.pt` is
+skipped rather than uploaded again.
 
 ## Subfolder naming
 

@@ -340,6 +340,11 @@ def files_for(checkpoint: Checkpoint) -> list[tuple[Path, str]]:
         run name, so every variant has the same entry point.
     """
     files: list[tuple[Path, str]] = [(checkpoint.weights, "best.pt")]
+    # Uploaded when it is there and silently skipped when it is not, so a run
+    # that has not been through doclayout_ft.hub.export_onnx still publishes.
+    onnx = checkpoint.weights.with_suffix(".onnx")
+    if onnx.is_file():
+        files.append((onnx, "best.onnx"))
     for name in RUN_ARTIFACTS:
         path = checkpoint.run_dir / name
         if path.is_file():

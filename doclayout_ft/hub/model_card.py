@@ -422,6 +422,10 @@ for box in results[0].boxes:
     print(class_name, round(float(box.conf), 3), [round(v) for v in (x1, y1, x2, y2)])
 ```
 
+Every variant also publishes `best.onnx`, the same weights exported at that
+variant's own image size with a static batch of 1, for runtimes without
+PyTorch.
+
 Swap the subfolder in `filename` to load a different variant. Run inference at
 the image size that variant was trained at; smaller inputs cost small classes
 such as `Footnote` and `Page-header` first, since those regions are only a few
@@ -678,6 +682,17 @@ results = model.predict("page.jpg", imgsz={checkpoint.imgsz}, conf=0.2)
 Run inference at `imgsz={checkpoint.imgsz}`, the size this checkpoint was
 trained at.
 
+The same weights are also published as `best.onnx`, opset 12, static input
+`1x3x{checkpoint.imgsz}x{checkpoint.imgsz}`, for runtimes without PyTorch:
+
+```python
+weights = hf_hub_download(repo_id="{repo_id}", filename="{subfolder}/best.onnx")
+model = YOLO(weights, task="detect")
+```
+
+The graph accepts that one input size only, so letterbox pages to
+{checkpoint.imgsz}x{checkpoint.imgsz} before feeding them in.
+
 ## Training configuration
 
 {_training_section(checkpoint)}
@@ -693,6 +708,7 @@ treated as an established improvement.
 | File | Contents |
 |---|---|
 | `best.pt` | The checkpoint |
+| `best.onnx` | The same weights as ONNX, opset 12, input `1x3x{checkpoint.imgsz}x{checkpoint.imgsz}` |
 | `args.yaml` | Hyperparameters the run was launched with |
 | `results.csv` | Per-epoch metrics |
 | `results.png` | Training curves |
