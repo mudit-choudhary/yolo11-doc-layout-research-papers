@@ -6,10 +6,18 @@ The ONNX file is written next to the weights it came from, as
 publish with the normal push command, and the Hub subfolder gains a
 ``best.onnx`` beside its ``best.pt``.
 
-Each run is exported at the image size it was trained at, read from its
-``args.yaml``. Exporting at a different size than the model was trained at
-costs accuracy, and an ONNX graph baked at the wrong resolution is a silent
-version of that mistake, since the file gives no hint of what it expects.
+Each graph takes a dynamic input: ``['batch', 3, 'height', 'width']``. A fixed
+shape is the obvious export and the wrong one. Consumers batch pages, and they
+letterbox to a stride multiple rather than to a square -- a letter-size page at
+1024 goes in as 1024x800 -- so a graph pinned to ``[1, 3, 1024, 1024]`` rejects
+both and onnxruntime fails with ``INVALID_ARGUMENT: Got invalid dimensions for
+input``. Forcing square input to satisfy such a graph changes what the model
+sees and therefore what it returns, so it is not a workaround either.
+
+The export still runs at the size from the run's ``args.yaml``, which is what
+the tracing pass uses and what the metadata records as the intended size, and
+each variant's card names it. Other sizes work; that one is what the weights
+were trained for.
 
 Every export is checked against the checkpoint it came from before it counts as
 done: the same random tensor goes through the fused PyTorch model and through
@@ -102,6 +110,7 @@ def export_one(checkpoint: Checkpoint, overwrite: bool) -> Path:
 
     written = model.export(
         format="onnx", imgsz=checkpoint.imgsz, opset=OPSET, simplify=True,
+        dynamic=True, nms=False,
     )
     return Path(written)
 
@@ -114,12 +123,13 @@ def verify(checkpoint: Checkpoint, onnx_file: Path) -> float:
         onnx_file: The graph written for it.
 
     Returns:
-        Largest output difference, relative to the largest output value.
+        Largest output difference over the shapes tried, relative to the
+        largest output value.
 
     Raises:
         AssertionError: If the two disagree by more than
-            :data:`MAX_RELATIVE_DRIFT`, or if the graph takes an input shape
-            other than the one it was exported for.
+            :data:`MAX_RELATIVE_DRIFT`, or if the graph's batch and spatial
+            axes are not free.
     """
     import numpy as np
     import onnxruntime as ort
@@ -129,14 +139,22 @@ def verify(checkpoint: Checkpoint, onnx_file: Path) -> float:
     size = checkpoint.imgsz
     session = ort.InferenceSession(str(onnx_file), providers=["CPUExecutionProvider"])
     shape = session.get_inputs()[0].shape
-    assert shape == [1, 3, size, size], f"{onnx_file} takes {shape}, expected [1, 3, {size}, {size}]"
+    free = [d for d in shape if isinstance(d, str)]
+    assert len(free) == 3 and shape[1] == 3, f"{onnx_file} takes {shape}, expected three free axes"
 
-    sample = torch.rand(1, 3, size, size)
-    with torch.no_grad():
-        expected = YOLO(str(checkpoint.weights)).model.fuse().eval()(sample)[0].numpy()
-    actual = session.run(None, {"images": sample.numpy()})[0]
+    model = YOLO(str(checkpoint.weights)).model.fuse().eval()
+    drift = 0.0
+    # The trained square, and a batched rectangle of the shape a consumer
+    # actually sends: several pages letterboxed to a stride multiple.
+    for sample_shape in ((1, 3, size, size), (2, 3, size, size - 224)):
+        sample = torch.rand(*sample_shape)
+        with torch.no_grad():
+            expected = model(sample)[0].numpy()
+        actual = session.run(None, {"images": sample.numpy()})[0]
+        assert actual.shape[0] == sample_shape[0], f"{onnx_file} lost the batch axis"
+        drift = max(drift, float(np.abs(expected - actual).max()
+                                 / max(np.abs(expected).max(), 1e-9)))
 
-    drift = float(np.abs(expected - actual).max() / max(np.abs(expected).max(), 1e-9))
     assert drift < MAX_RELATIVE_DRIFT, f"{onnx_file} drifts {drift:.2e} from {checkpoint.weights}"
     return drift
 

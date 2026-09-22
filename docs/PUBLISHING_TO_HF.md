@@ -190,15 +190,18 @@ ONNX graph, outputs compared. Observed drift across the seventeen runs is 1e-6
 to 3e-6, which is float reordering from Conv/BN fusion and onnxslim, not a
 difference in the model.
 
-One difference is real, and it is in the input, not the weights.
-`YOLO(best.pt).predict()` letterboxes to a *rectangle* by default
-(`rect=True`), padding only to the next stride multiple; the ONNX graph takes a
-fixed square. Detections then differ slightly, and a borderline box can appear
-in one and not the other. Pass `rect=False` to the `.pt` path and the two agree
-box for box. Either is valid; they are not the same preprocessing.
+Graphs are exported with `dynamic=True`, so the input is
+`['batch', 3, 'height', 'width']`. This is not optional. Consumers batch pages,
+and they letterbox to a stride multiple rather than to a square -- a letter-size
+page at 1024 arrives as 1024x800 -- so a fixed `[1, 3, 1024, 1024]` input fails
+at load with `INVALID_ARGUMENT: Got invalid dimensions for input`. Forcing
+square input to satisfy a fixed graph is not a workaround either: the model
+then sees different padding and returns different boxes. The first ONNX batch
+published here was fixed-shape and had to be replaced for exactly this reason.
 
-Each graph is baked at its run's own `imgsz` (640 or 1024, read from
-`args.yaml`) with a batch size of 1. A consumer must resize input to that same
+The export still traces at its run's own `imgsz` (640 or 1024, read from
+`args.yaml`), and that size is what the metadata and the variant card name as
+the one to run at. A consumer must resize input to that same
 size, which the card's table records per variant. Opset 12, which onnxruntime,
 OpenCV's DNN module and TensorRT all read.
 
